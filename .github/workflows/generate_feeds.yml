@@ -13,7 +13,7 @@ on:
       full_refresh:
         description: 'Full refresh (ignore cache)'
         required: false
-        default: 'false'
+        default: false
         type: boolean
       max_articles:
         description: 'Max articles per feed'
@@ -25,18 +25,19 @@ env:
   MAX_ARTICLES: ${{ vars.MAX_ARTICLES || '50' }}
   LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
   # CNInfo: CI 跑全市场最新公告，关掉 PDF 下载（CI 不持久化 downloads/，下了也丢弃）
+  CNINFO_CATEGORY: 'category_ndbg_szsh;category_sjdbg_szsh'
   CNINFO_DOWNLOAD_PDF: 'false'
   CNINFO_MAX_ITEMS: '30'
   # Xiaoyuzhou: 默认订阅一个示例播客作为 CI demo（用户 fork 后可改）
   # 这里用「除你武器」(pid=63b7c6697dcc05cd33b51cd5)。仅 RSS 元数据追新，
   # 不下载 mp3（CI 不持久化 downloads/）。Fork 后改成你自己关心的播客即可。
-  XIAOYUZHOU_PODCAST_ID: ${{ vars.XIAOYUZHOU_PODCAST_ID || '63b7c6697dcc05cd33b51cd5' }}
-  XIAOYUZHOU_DOWNLOAD_AUDIO: 'false'
+  # XIAOYUZHOU_PODCAST_ID: ${{ vars.XIAOYUZHOU_PODCAST_ID || '63b7c6697dcc05cd33b51cd5' }}
+  # XIAOYUZHOU_DOWNLOAD_AUDIO: 'false'
   # Xueqiu: 默认订阅一个示例账号作为 CI demo（用户 fork 后可改）
   # 这里用「证券日报」(uid=8353550788) — 机构号高频更新，适合验证抓取健康。
   # 无需登录，DrissionPage headless 直接过 Aliyun WAF。
-  XUEQIU_USER_ID: ${{ vars.XUEQIU_USER_ID || '8353550788' }}
-  XUEQIU_MAX_POSTS: '20'
+  # XUEQIU_USER_ID: ${{ vars.XUEQIU_USER_ID || '8353550788' }}
+  # XUEQIU_MAX_POSTS: '20'
 
 jobs:
   generate:
