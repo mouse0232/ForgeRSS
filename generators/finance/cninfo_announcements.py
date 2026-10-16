@@ -162,7 +162,7 @@ class CninfoAnnouncementsGenerator(BaseFeedGenerator):
         """Fetch announcements from a market, optionally narrowed by category.
 
         `category` examples: 'category_ndbg_szsh' (annual reports),
-        'category_yjkb_szsh' (preliminary results), 'category_gqjl_szsh'
+        'category_yjygjxz_szsh' (earnings forecasts), 'category_gqjl_szsh'
         (equity incentives). When set, results across all listed companies
         are filtered to that category.
         """

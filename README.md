@@ -618,7 +618,7 @@ XIAOYUZHOU_DOWNLOAD_AUDIO=true                      # 小宇宙音频下载（mp
 
 # 巨潮资讯（三选一）
 CNINFO_KEYWORDS="股权激励,业绩快报"                  # 按主题关键词
-# CNINFO_CATEGORY=category_ndbg_szsh                # 或按分类（全市场年报等）
+# CNINFO_CATEGORY=category_ndbg_szsh                # 或按分类（全市场年报等；多个用英文分号隔开）
 # 留空 = 按市场拉最新
 CNINFO_DOWNLOAD_PDF=true                            # PDF 自动下载（默认 true）
 ```

@@ -24,11 +24,14 @@ CNINFO_KEYWORDS="股权激励,业绩快报,回购" python scripts/run_single.py 
 # 全市场年报
 CNINFO_CATEGORY=category_ndbg_szsh python scripts/run_single.py cninfo_announcements
 
-# 业绩快报
-CNINFO_CATEGORY=category_yjkb_szsh python scripts/run_single.py cninfo_announcements
+# 业绩预告
+CNINFO_CATEGORY=category_yjygjxz_szsh python scripts/run_single.py cninfo_announcements
+
+# 多个分类用英文分号隔开（逗号会被巨潮忽略，返回全部公告）
+CNINFO_CATEGORY="category_ndbg_szsh;category_sjdbg_szsh" python scripts/run_single.py cninfo_announcements
 ```
 
-常用分类代码：
+常用分类代码（巨潮没有公开清单；其他分类可在巨潮公告查询页选好分类后，从浏览器网络请求 `hisAnnouncement/query` 的 `category` 参数里取）：
 
 | 代码 | 含义 |
 |---|---|
@@ -36,12 +39,13 @@ CNINFO_CATEGORY=category_yjkb_szsh python scripts/run_single.py cninfo_announcem
 | `category_bndbg_szsh` | 半年度报告 |
 | `category_yjdbg_szsh` | 一季度报告 |
 | `category_sjdbg_szsh` | 三季度报告 |
-| `category_yjkb_szsh` | 业绩快报 |
 | `category_yjygjxz_szsh` | 业绩预告 |
 | `category_gqjl_szsh` | 股权激励 |
 | `category_zj_szsh` | 增减持 |
 | `category_dshgg_szsh` | 董事会公告 |
 | `category_gddh_szsh` | 股东大会 |
+
+巨潮没有单独的业绩快报分类，可改用关键词：`CNINFO_KEYWORDS="业绩快报"`。同时配置了 `CNINFO_KEYWORDS` 时，`CNINFO_CATEGORY` 不生效。
 
 #### 3) 按市场（默认）
 
