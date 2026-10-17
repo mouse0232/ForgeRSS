@@ -44,7 +44,7 @@ from generators.social.douyin.scraper import (
     DOUYIN_PROFILE_DIR,
 )
 from generators.base import FetchBlocked
-from generators.social.base.page_guard import raise_no_content
+from generators.social.base.page_guard import KIND_EMPTY, diagnose_empty_page, raise_no_content
 
 CN_TZ = pytz.timezone("Asia/Shanghai")
 
@@ -320,9 +320,12 @@ class DouyinUserGenerator(BaseFeedGenerator):
 
             # Phase 2: build Articles. Videos are list-only (no detail visit);
             # notes navigate to the detail page to pull the 9-photo gallery + desc.
+            note_blocked = None
             for info in cards:
                 try:
                     if info["aweme_type"] == "note":
+                        if note_blocked:
+                            continue
                         article = self._build_note_article(
                             browser, info, sec_uid, author_name
                         )
@@ -330,9 +333,18 @@ class DouyinUserGenerator(BaseFeedGenerator):
                         article = self._build_video_article(info, sec_uid, author_name)
                     if article:
                         articles.append(article)
+                except FetchBlocked as e:
+                    # A note page hit a wall: stop opening note pages; videos are
+                    # list-only and still get built.
+                    self.logger.error(f"Note detail blocked: {e}")
+                    note_blocked = e
+                    continue
                 except Exception as e:
                     self.logger.debug(f"Article build failed for {info.get('href')}: {e}")
                     continue
+
+            if not articles and note_blocked:
+                raise note_blocked
 
             # Cards were there but none parsed (e.g. only unrelated nav links): still empty.
             if not articles:
@@ -555,8 +567,8 @@ class DouyinUserGenerator(BaseFeedGenerator):
         browser.wait(random.uniform(3, 5))
 
         html = browser.html
-        if not html or "扫码登录" in html or "登录抖音" in html:
-            self.logger.warning(f"Note detail blocked by login: {href}")
+        if not html:
+            self.logger.warning(f"Note detail page is empty: {href}")
             return None
 
         soup = BeautifulSoup(html, "html.parser")
@@ -571,6 +583,13 @@ class DouyinUserGenerator(BaseFeedGenerator):
             title_text = (desc[:50] + ("…" if len(desc) > 50 else "")) if desc else info["list_title"]
 
         images = _extract_note_images(soup)
+        # Only when the note gave neither text nor photos, check whether the page was
+        # a login or captcha wall. The page HTML carries captions and the header's
+        # login button, so matching "扫码登录" against the whole page flags healthy notes.
+        if not desc and not images:
+            kind, detail = diagnose_empty_page(browser)
+            if kind != KIND_EMPTY:
+                raise FetchBlocked("douyin", kind, detail)
         if not images and info.get("thumbnail"):
             images = [info["thumbnail"]]
         self.logger.info(f"Note {info['aweme_id']}: {len(images)} photos, desc {len(desc)} chars")
