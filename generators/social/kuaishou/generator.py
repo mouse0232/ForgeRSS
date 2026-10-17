@@ -37,6 +37,8 @@ from generators.social.kuaishou.scraper import (
     create_kuaishou_browser,
     KUAISHOU_PROFILE_DIR,
 )
+from generators.base import FetchBlocked
+from generators.social.base.page_guard import raise_no_content
 
 logger = logging.getLogger(__name__)
 
@@ -134,16 +136,24 @@ class KuaishouUserGenerator(BaseFeedGenerator):
             )
             per_user_cap = run_cap
 
+        blocked = None
         try:
             for raw in self.USER_INPUTS:
                 uid, profile_url = _parse_user_input(raw)
                 self.logger.info(f"Fetching videos from user {uid} (URL: {profile_url})")
-                videos = self._fetch_user_videos(browser, uid, profile_url, max_videos=per_user_cap)
+                try:
+                    videos = self._fetch_user_videos(browser, uid, profile_url, max_videos=per_user_cap)
+                except FetchBlocked as e:
+                    self.logger.error(f"No videos from {uid}: {e}")
+                    blocked = blocked or e
+                    continue
                 articles.extend(videos)
                 self.logger.info(f"Found {len(videos)} videos from {uid}")
         finally:
             browser.quit()
 
+        if not articles and blocked:
+            raise blocked
         return articles
 
     def _fetch_user_videos(
@@ -166,23 +176,17 @@ class KuaishouUserGenerator(BaseFeedGenerator):
             current_url = browser.url
             self.logger.info(f"Current URL after loading: {current_url}")
 
-            html = browser.html
-            if "验证" in html and "verify" in html.lower():
-                self.logger.error("Captcha detected, please solve in browser and rerun")
-                return []
-            if "扫码登录" in html or "登录快手" in html:
-                self.logger.error("Login required — Kuaishou profile may have expired")
-                return []
-
             author_name = self._extract_author_name(browser, uid)
             self.logger.info(f"Author: {author_name}")
 
             self._scroll_for_videos(browser, max_videos)
 
+            # Login / captcha checks only run when no cards were found: the page
+            # HTML carries captions and comments, so matching "验证" or "登录"
+            # against the whole page flags healthy accounts.
             video_items = self._find_video_items(browser)
             if not video_items:
-                self.logger.warning("No video items found with any selector")
-                return []
+                raise_no_content("kuaishou", browser)
 
             self.logger.info(f"Found {len(video_items)} video cards on page")
 
@@ -199,10 +203,16 @@ class KuaishouUserGenerator(BaseFeedGenerator):
                     self.logger.debug(f"Parse failed for one item: {e}")
                     continue
 
+            # Cards were there but none parsed (e.g. only unrelated nav links): still empty.
+            if not articles:
+                raise_no_content("kuaishou", browser)
+
             if self.DOWNLOAD_VIDEOS and articles:
                 for art in articles:
                     self._download_video(art.url, uid, browser=browser)
 
+        except FetchBlocked:
+            raise
         except Exception as e:
             self.logger.error(f"Error fetching videos for {uid}: {e}")
 
@@ -312,14 +322,9 @@ class KuaishouUserGenerator(BaseFeedGenerator):
         if not title:
             title = f"video_{video_id}"
 
-        # Author name on the card (overrides the user-level one if present)
-        try:
-            name_el = item.ele('css:.name', timeout=0.3)
-            if name_el and (name_el.text or "").strip():
-                author_name = name_el.text.strip()
-        except Exception:
-            pass
-
+        # Keep the profile-header author name. The profile page can mix in
+        # recommendation cards whose `.name` is another creator, so the
+        # card-level name is not trusted.
         pub_date = datetime.now(pytz.timezone("Asia/Shanghai"))
 
         html_parts = [

@@ -103,6 +103,19 @@ class Article:
         return cls(**data)
 
 
+class FetchBlocked(RuntimeError):
+    """The source page gave no content; `kind` says why (login / captcha / empty).
+
+    Raised instead of returning an empty list, so a run that got nothing is
+    reported as failed with a reason rather than as "0 new articles".
+    """
+
+    def __init__(self, source: str, kind: str, message: str):
+        self.source = source
+        self.kind = kind
+        super().__init__(f"{source}: {message}")
+
+
 class BaseFeedGenerator(ABC):
     """
     Abstract base class for RSS feed generators.
@@ -591,7 +604,15 @@ class BaseFeedGenerator(ABC):
             
             # Fetch new
             self.logger.info(f"Fetching articles from {self.FEED_URL}")
-            new_articles = self.fetch_articles()
+            try:
+                new_articles = self.fetch_articles()
+            except FetchBlocked as e:
+                # Keep serving the existing feed, but report the run as failed
+                # with the reason (expired login, captcha, or a page with nothing on it).
+                self.logger.error(f"Fetch got no content ({e.kind}): {e}")
+                if existing:
+                    self.save_feed_streaming(existing[:max_articles])
+                return False
             
             if not new_articles:
                 self.logger.warning("No articles fetched")

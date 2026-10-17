@@ -36,6 +36,8 @@ from generators.social.weibo.scraper import (
     create_weibo_browser,
     WEIBO_PROFILE_DIR,
 )
+from generators.base import FetchBlocked
+from generators.social.base.page_guard import raise_no_content
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,7 @@ class WeiboUserGenerator(BaseFeedGenerator):
     ]
 
     MAX_POSTS = int(os.environ.get("WEIBO_MAX_POSTS", "20"))
+    MAX_SCROLL_STEPS = 40
     DOWNLOAD_VIDEOS = os.environ.get("WEIBO_DOWNLOAD_VIDEOS", "false").lower() == "true"
 
     def __init__(self):
@@ -124,16 +127,24 @@ class WeiboUserGenerator(BaseFeedGenerator):
             )
             per_user_cap = run_cap
 
+        blocked = None
         try:
             for raw in self.USER_INPUTS:
                 uid, profile_url = _parse_user_input(raw)
                 self.logger.info(f"Fetching posts from user {uid} (URL: {profile_url})")
-                posts = self._fetch_user_posts(browser, uid, profile_url, max_posts=per_user_cap)
+                try:
+                    posts = self._fetch_user_posts(browser, uid, profile_url, max_posts=per_user_cap)
+                except FetchBlocked as e:
+                    self.logger.error(f"No posts from {uid}: {e}")
+                    blocked = blocked or e
+                    continue
                 articles.extend(posts)
                 self.logger.info(f"Found {len(posts)} posts from {uid}")
         finally:
             browser.quit()
 
+        if not articles and blocked:
+            raise blocked
         return articles
 
     def _fetch_user_posts(
@@ -158,38 +169,50 @@ class WeiboUserGenerator(BaseFeedGenerator):
 
             if "passport.weibo" in (current_url or "") or "/login" in (current_url or ""):
                 self.logger.error("Redirected to login — Weibo profile may have expired")
-                return []
+                raise_no_content("weibo", browser)
 
             author_name = self._extract_author_name(browser, uid)
             self.logger.info(f"Author: {author_name}")
 
-            # Scroll for more posts
-            self._scroll_for_posts(browser, max_posts)
-
-            post_items = self._find_post_items(browser)
-            if not post_items:
-                self.logger.warning("No post items found with any selector")
-                return []
-
-            self.logger.info(f"Found {len(post_items)} post cards on page")
-
-            parsed = 0
-            for item in post_items:
-                if parsed >= max_posts:
+            # The profile feed is virtualized: only the few posts near the viewport
+            # stay in the DOM. Scrolling to the bottom first and reading afterwards
+            # misses the newest posts, so collect while scrolling in small steps.
+            collected: dict[str, Article] = {}
+            saw_cards = False
+            idle = 0
+            for _ in range(self.MAX_SCROLL_STEPS):
+                before = len(collected)
+                for item in self._find_post_items(browser):
+                    saw_cards = True
+                    try:
+                        article = self._parse_post_item(item, uid, author_name)
+                    except Exception as e:
+                        self.logger.debug(f"Parse failed for one item: {e}")
+                        continue
+                    if article and article.url not in collected:
+                        collected[article.url] = article
+                if len(collected) >= max_posts:
                     break
-                try:
-                    article = self._parse_post_item(item, uid, author_name)
-                    if article:
-                        articles.append(article)
-                        parsed += 1
-                except Exception as e:
-                    self.logger.debug(f"Parse failed for one item: {e}")
-                    continue
+                idle = idle + 1 if len(collected) == before else 0
+                if idle >= 4:
+                    break
+                browser.scroll.down(900)
+                browser.wait(1)
+
+            if not saw_cards:
+                raise_no_content("weibo", browser)
+            articles = list(collected.values())[:max_posts]
+            self.logger.info(f"Collected {len(articles)} posts")
+            # Cards were there but none parsed (e.g. only unrelated nav links): still empty.
+            if not articles:
+                raise_no_content("weibo", browser)
 
             if self.DOWNLOAD_VIDEOS and articles:
                 for art in articles:
                     self._maybe_download_video(art, uid, browser)
 
+        except FetchBlocked:
+            raise
         except Exception as e:
             self.logger.error(f"Error fetching posts for {uid}: {e}")
 
@@ -219,30 +242,6 @@ class WeiboUserGenerator(BaseFeedGenerator):
                 continue
         return f"User{uid}"
 
-    def _scroll_for_posts(self, browser, target: int):
-        max_scrolls = 8
-        no_change = 0
-        prev_count = 0
-        for i in range(max_scrolls):
-            browser.scroll.to_bottom()
-            browser.wait(2)
-            try:
-                links = browser.eles('tag:a', timeout=1)
-                cnt = len([a for a in links if re.search(r'/\d+/[A-Za-z0-9]+', a.attr('href') or '')])
-            except Exception:
-                cnt = 0
-            if cnt >= target * 2:
-                self.logger.info(f"Reached target ({cnt} >= {target}*2), stopping scroll")
-                return
-            if cnt == prev_count:
-                no_change += 1
-                if no_change >= 2:
-                    self.logger.info(f"No new posts after 2 attempts, stopping scroll")
-                    return
-            else:
-                no_change = 0
-            prev_count = cnt
-
     def _find_post_items(self, browser) -> list:
         """Each post on a weibo profile is wrapped in an <article> tag."""
         selectors = [
@@ -255,7 +254,7 @@ class WeiboUserGenerator(BaseFeedGenerator):
             try:
                 items = browser.eles(sel, timeout=1)
                 if items:
-                    self.logger.info(f"Using selector: {sel} ({len(items)} items)")
+                    self.logger.debug(f"Using selector: {sel} ({len(items)} items)")
                     return items
             except Exception:
                 continue

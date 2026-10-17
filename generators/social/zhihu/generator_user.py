@@ -24,6 +24,8 @@ from .scraper import (
     create_zhihu_browser,
     verify_zhihu_login,
 )
+from generators.base import FetchBlocked
+from generators.social.base.page_guard import raise_no_content
 
 
 class ZhihuUserGenerator(BaseFeedGenerator):
@@ -73,13 +75,21 @@ class ZhihuUserGenerator(BaseFeedGenerator):
                 return []
 
             all_articles = []
+            blocked = None
 
             for user_id in self.users:
                 self.logger.info(f"Fetching user: {user_id}")
-                articles = self._fetch_user_activities(browser, user_id)
+                try:
+                    articles = self._fetch_user_activities(browser, user_id)
+                except FetchBlocked as e:
+                    self.logger.error(f"No activities from {user_id}: {e}")
+                    blocked = blocked or e
+                    continue
                 all_articles.extend(articles)
                 time.sleep(2)  # Rate limiting
 
+            if not all_articles and blocked:
+                raise blocked
             return all_articles
 
         finally:
@@ -103,6 +113,8 @@ class ZhihuUserGenerator(BaseFeedGenerator):
         # Parse activity items
         activity_items = soup.select(".List-item")
         self.logger.info(f"Found {len(activity_items)} activities for {user_name}")
+        if not activity_items:
+            raise_no_content("zhihu", browser)
 
         for item in activity_items:
             try:
@@ -112,6 +124,9 @@ class ZhihuUserGenerator(BaseFeedGenerator):
             except Exception as e:
                 self.logger.warning(f"Failed to parse activity: {e}")
 
+        # Activities were there but none parsed (layout changed): still empty.
+        if not articles:
+            raise_no_content("zhihu", browser)
         return articles
 
     def _parse_activity_item(self, item, user_name: str, user_id: str) -> Optional[Article]:

@@ -43,6 +43,8 @@ from generators.social.douyin.scraper import (
     create_douyin_browser,
     DOUYIN_PROFILE_DIR,
 )
+from generators.base import FetchBlocked
+from generators.social.base.page_guard import KIND_EMPTY, diagnose_empty_page, raise_no_content
 
 CN_TZ = pytz.timezone("Asia/Shanghai")
 
@@ -236,18 +238,26 @@ class DouyinUserGenerator(BaseFeedGenerator):
             )
             per_user_cap = run_cap
 
+        blocked = None
         try:
             for raw in self.USER_INPUTS:
                 sec_uid, profile_url = _parse_user_input(raw)
                 self.logger.info(
                     f"Fetching videos from user {sec_uid[:24]}... (URL: {profile_url})"
                 )
-                videos = self._fetch_user_videos(browser, sec_uid, profile_url, max_videos=per_user_cap)
+                try:
+                    videos = self._fetch_user_videos(browser, sec_uid, profile_url, max_videos=per_user_cap)
+                except FetchBlocked as e:
+                    self.logger.error(f"No videos from {sec_uid[:24]}: {e}")
+                    blocked = blocked or e
+                    continue
                 articles.extend(videos)
                 self.logger.info(f"Found {len(videos)} videos from {sec_uid[:24]}")
         finally:
             browser.quit()
 
+        if not articles and blocked:
+            raise blocked
         return articles
 
     def _fetch_user_videos(
@@ -272,15 +282,6 @@ class DouyinUserGenerator(BaseFeedGenerator):
             current_url = browser.url
             self.logger.info(f"Current URL after loading: {current_url}")
 
-            # Detect login/captcha walls
-            html = browser.html
-            if "验证" in html and "verify" in html.lower():
-                self.logger.error("Captcha detected, please solve in browser and rerun")
-                return []
-            if "扫码登录" in html or "登录抖音" in html:
-                self.logger.error("Login required — Douyin profile may have expired")
-                return []
-
             # Extract author display name
             author_name = self._extract_author_name(browser, sec_uid)
             self.logger.info(f"Author: {author_name}")
@@ -289,10 +290,12 @@ class DouyinUserGenerator(BaseFeedGenerator):
             self._scroll_for_videos(browser, max_videos)
 
             # Parse video cards (selectors WILL drift; keep flexible fallbacks)
+            # Login / captcha checks only run when no cards were found: the page
+            # HTML carries captions and comments, so matching "验证" or "登录"
+            # against the whole page flags healthy accounts.
             video_items = self._find_video_items(browser)
             if not video_items:
-                self.logger.warning("No video items found with any selector")
-                return []
+                raise_no_content("douyin", browser)
 
             self.logger.info(f"Found {len(video_items)} post cards on page")
 
@@ -317,9 +320,12 @@ class DouyinUserGenerator(BaseFeedGenerator):
 
             # Phase 2: build Articles. Videos are list-only (no detail visit);
             # notes navigate to the detail page to pull the 9-photo gallery + desc.
+            note_blocked = None
             for info in cards:
                 try:
                     if info["aweme_type"] == "note":
+                        if note_blocked:
+                            continue
                         article = self._build_note_article(
                             browser, info, sec_uid, author_name
                         )
@@ -327,9 +333,22 @@ class DouyinUserGenerator(BaseFeedGenerator):
                         article = self._build_video_article(info, sec_uid, author_name)
                     if article:
                         articles.append(article)
+                except FetchBlocked as e:
+                    # A note page hit a wall: stop opening note pages; videos are
+                    # list-only and still get built.
+                    self.logger.error(f"Note detail blocked: {e}")
+                    note_blocked = e
+                    continue
                 except Exception as e:
                     self.logger.debug(f"Article build failed for {info.get('href')}: {e}")
                     continue
+
+            if not articles and note_blocked:
+                raise note_blocked
+
+            # Cards were there but none parsed (e.g. only unrelated nav links): still empty.
+            if not articles:
+                raise_no_content("douyin", browser)
 
             # Download media if enabled. Done after parsing so we only fetch
             # what made the cut.
@@ -342,6 +361,8 @@ class DouyinUserGenerator(BaseFeedGenerator):
                     if "/note/" in art.url:
                         self._download_note_images(art, sec_uid)
 
+        except FetchBlocked:
+            raise
         except Exception as e:
             self.logger.error(f"Error fetching videos for {sec_uid[:24]}: {e}")
 
@@ -546,8 +567,8 @@ class DouyinUserGenerator(BaseFeedGenerator):
         browser.wait(random.uniform(3, 5))
 
         html = browser.html
-        if not html or "扫码登录" in html or "登录抖音" in html:
-            self.logger.warning(f"Note detail blocked by login: {href}")
+        if not html:
+            self.logger.warning(f"Note detail page is empty: {href}")
             return None
 
         soup = BeautifulSoup(html, "html.parser")
@@ -562,6 +583,13 @@ class DouyinUserGenerator(BaseFeedGenerator):
             title_text = (desc[:50] + ("…" if len(desc) > 50 else "")) if desc else info["list_title"]
 
         images = _extract_note_images(soup)
+        # Only when the note gave neither text nor photos, check whether the page was
+        # a login or captcha wall. The page HTML carries captions and the header's
+        # login button, so matching "扫码登录" against the whole page flags healthy notes.
+        if not desc and not images:
+            kind, detail = diagnose_empty_page(browser)
+            if kind != KIND_EMPTY:
+                raise FetchBlocked("douyin", kind, detail)
         if not images and info.get("thumbnail"):
             images = [info["thumbnail"]]
         self.logger.info(f"Note {info['aweme_id']}: {len(images)} photos, desc {len(desc)} chars")
