@@ -74,14 +74,24 @@ def validate_feed(feed_path: Path) -> bool:
 
 
 def main():
-    feeds_dir = Path(__file__).parent.parent / "feeds"
-    
-    if not feeds_dir.exists():
-        logger.error(f"Feeds directory not found: {feeds_dir}")
-        sys.exit(1)
-    
-    feed_files = list(feeds_dir.glob("*.xml"))
-    
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+
+    if args:
+        feed_files = [Path(a) for a in args]
+        missing = [p for p in feed_files if not p.exists()]
+        if missing:
+            for p in missing:
+                logger.error(f"Feed file not found: {p}")
+            sys.exit(1)
+    else:
+        feeds_dir = Path(__file__).parent.parent / "feeds"
+
+        if not feeds_dir.exists():
+            logger.error(f"Feeds directory not found: {feeds_dir}")
+            sys.exit(1)
+
+        feed_files = list(feeds_dir.glob("*.xml"))
+
     if not feed_files:
         logger.warning("No feed files found")
         sys.exit(0)

@@ -1,13 +1,13 @@
 # Generate AI Coding Tools Documentation RSS feeds
 # Documentation typically updates less frequently than news feeds
-# Default: weekly on Monday 00:00 UTC
+# Manual trigger only
 
 name: Generate Docs Feeds
 
 on:
-  schedule:
-    # Every Monday at 00:00 UTC (weekly)
-    - cron: '0 0 * * 1'
+  # 手动触发；如需要定期更新，自行取消下面 schedule 的注释
+  # schedule:
+  #   - cron: '0 0 * * 1'
   workflow_dispatch:
     inputs:
       full_refresh:
