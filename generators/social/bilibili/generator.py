@@ -28,6 +28,8 @@ from generators.social.bilibili.scraper import (
     check_bilibili_ready,
     download_video,
 )
+from generators.base import FetchBlocked
+from generators.social.base.page_guard import raise_no_content
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +81,7 @@ class BilibiliUPGenerator(BaseFeedGenerator):
             return []
         
         articles = []
+        blocked = None
         
         try:
             # Determine fetch count based on mode
@@ -99,17 +102,24 @@ class BilibiliUPGenerator(BaseFeedGenerator):
             
             for mid in self.UP_MIDS:
                 self.logger.info(f"Fetching videos from UP master {mid}")
-                videos = self._fetch_up_videos(
-                    browser, 
-                    mid, 
-                    max_videos=max_videos,
-                    history_mode=self.HISTORY_MODE
-                )
+                try:
+                    videos = self._fetch_up_videos(
+                        browser, 
+                        mid, 
+                        max_videos=max_videos,
+                        history_mode=self.HISTORY_MODE
+                    )
+                except FetchBlocked as e:
+                    self.logger.error(f"No videos from UP master {mid}: {e}")
+                    blocked = blocked or e
+                    continue
                 articles.extend(videos)
                 self.logger.info(f"Found {len(videos)} videos from UP master {mid}")
         finally:
             browser.quit()
         
+        if not articles and blocked:
+            raise blocked
         return articles
     
     def _fetch_up_videos(
@@ -222,7 +232,7 @@ class BilibiliUPGenerator(BaseFeedGenerator):
             
             if not video_items:
                 self.logger.warning(f"No videos found with any selector for UP master {mid}")
-                return []
+                raise_no_content("bilibili", browser)
             
             # Parse videos
             parsed_count = 0
@@ -249,7 +259,13 @@ class BilibiliUPGenerator(BaseFeedGenerator):
                     except Exception as e:
                         self.logger.error(f"Error parsing video link: {e}")
                         continue
+
+            # Cards were there but none parsed (e.g. only unrelated nav links): still empty.
+            if not articles:
+                raise_no_content("bilibili", browser)
         
+        except FetchBlocked:
+            raise
         except Exception as e:
             self.logger.error(f"Error fetching videos from UP master {mid}: {e}")
         

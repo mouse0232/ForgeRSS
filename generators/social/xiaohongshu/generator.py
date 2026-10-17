@@ -34,6 +34,12 @@ from generators.social.xiaohongshu.scraper import (
     check_xhs_ready,
     download_media,
 )
+from generators.base import FetchBlocked
+from generators.social.base.page_guard import (
+    KIND_EMPTY,
+    diagnose_empty_page,
+    raise_no_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -121,20 +127,28 @@ class XiaohongshuUserGenerator(BaseFeedGenerator):
             )
             per_user_cap = run_cap
 
+        blocked = None
         try:
             for raw in self.USER_INPUTS:
                 user_id, profile_url = self._parse_user_input(raw)
                 self.logger.info(
                     f"Fetching notes from user {user_id} (URL: {profile_url})"
                 )
-                notes = self._fetch_user_notes(
-                    browser, user_id, profile_url, max_notes=per_user_cap,
-                )
+                try:
+                    notes = self._fetch_user_notes(
+                        browser, user_id, profile_url, max_notes=per_user_cap,
+                    )
+                except FetchBlocked as e:
+                    self.logger.error(f"No notes from user {user_id}: {e}")
+                    blocked = blocked or e
+                    continue
                 articles.extend(notes)
                 self.logger.info(f"Found {len(notes)} notes from user {user_id}")
         finally:
             browser.quit()
 
+        if not articles and blocked:
+            raise blocked
         return articles
     
     def _fetch_user_notes(
@@ -167,17 +181,7 @@ class XiaohongshuUserGenerator(BaseFeedGenerator):
                 self.logger.error(f"Redirected to homepage! User ID {user_id} may be invalid or login required")
                 self.logger.error(f"Expected: {url}")
                 self.logger.error(f"Got: {current_url}")
-                return []
-            
-            # Check for verification or login requirement
-            html = browser.html
-            if "验证" in html or "滑块" in html:
-                self.logger.error("Detected verification challenge, please solve manually")
-                return []
-            
-            if "登录" in html and "扫码登录" in html:
-                self.logger.error("Not logged in or session expired")
-                return []
+                raise_no_content("xiaohongshu", browser)
             
             # Check page title to confirm user profile page
             page_title = browser.title
@@ -186,7 +190,7 @@ class XiaohongshuUserGenerator(BaseFeedGenerator):
             # XHS user profile title format is usually "username's homepage - Xiaohongshu"
             if "小红书" not in page_title and "发现" in page_title:
                 self.logger.error(f"Not on user profile page! Page title: {page_title}")
-                return []
+                raise_no_content("xiaohongshu", browser)
             
             # Extract user info
             user_info = self._extract_user_info(browser)
@@ -198,129 +202,46 @@ class XiaohongshuUserGenerator(BaseFeedGenerator):
             if user_info.get('followers'):
                 self.logger.info(f"Stats: {user_info['followers']} followers, {user_info.get('likes', 'N/A')} likes")
             
-            # Scroll to load more notes (lazy loading, infinite scroll on XHS)
-            self.logger.info("Scrolling to load more notes...")
-            previous_count = 0
-            no_change_count = 0  # Consecutive no-change count
-            max_scroll_attempts = 20  # Max 20 scrolls (XHS may have many notes)
-            
-            for scroll_num in range(max_scroll_attempts):
-                # Scroll to bottom
-                browser.scroll.to_bottom()
-                time.sleep(random.uniform(1.5, 2.5))
-                
-                # Check current loaded notes count
-                current_notes = browser.eles('css:section.note-item')
-                current_count = len(current_notes)
-                
-                # Strategy 1: Reached 2x target, can stop (with margin)
-                if current_count >= max_notes * 2:
-                    self.logger.info(f"Scroll {scroll_num + 1}: Loaded {current_count} notes (reached target {max_notes}*2)")
-                    break
-                
-                # Strategy 2: Detect if new notes loaded
-                if current_count == previous_count:
-                    no_change_count += 1
-                    self.logger.info(f"Scroll {scroll_num + 1}: {current_count} notes (no new {no_change_count}/3)")
-                    
-                    # 3 consecutive no-change means reached bottom
-                    if no_change_count >= 3:
-                        self.logger.info("No new notes loaded after 3 attempts, reached bottom")
-                        break
-                else:
-                    # New notes loaded, reset counter
-                    new_count = current_count - previous_count
-                    no_change_count = 0
-                    self.logger.info(f"Scroll {scroll_num + 1}: {current_count} notes (+{new_count})")
-                
-                previous_count = current_count
-                
-                # Strategy 3: Reached target, can stop (no need for exact 2x)
-                if current_count >= max_notes:
-                    self.logger.info(f"Loaded enough notes ({current_count} >= {max_notes})")
-                    break
-            
-            # Get all note items
-            note_items = browser.eles('css:section.note-item')
-            self.logger.info(f"Total {len(note_items)} note items found after scrolling")
-            
-            if not note_items:
-                self.logger.warning("No note items found")
-                return []
-            
-            # Limit count
-            note_items = note_items[:max_notes]
-            self.logger.info(f"Processing {len(note_items)} notes...")
-            
-            # Extract basic info from list page first (without opening detail page)
+            # The note grid is virtualized: the DOM keeps only about 30 cards near
+            # the viewport and drops the ones scrolled past. Scrolling to the bottom
+            # first and reading afterwards misses the newest notes, so start from the
+            # top and collect while scrolling in small steps.
             note_infos = []
-            for idx, item in enumerate(note_items):
-                try:
-                    # Extract basic info from list item
-                    title_elem = item.ele('css:a.title', timeout=1)
-                    if not title_elem:
-                        self.logger.warning(f"Note {idx+1}: No title found, skipping")
+            seen_ids = set()
+            saw_cards = False
+            idle = 0
+            for _ in range(40):
+                before = len(note_infos)
+                for item in browser.eles('css:section.note-item'):
+                    saw_cards = True
+                    try:
+                        info = self._note_info_from_card(item)
+                    except Exception as e:
+                        self.logger.debug(f"Error extracting note card: {e}")
                         continue
-                    
-                    title_span = title_elem.ele('tag:span', timeout=1)
-                    title = title_span.text.strip() if title_span else title_elem.text.strip()
-                    if not title:
-                        self.logger.warning(f"Note {idx+1}: Empty title, skipping")
+                    if not info or info['id'] in seen_ids:
                         continue
-                    
-                    # Get note URL
-                    note_url = title_elem.attr('href')
-                    if not note_url:
-                        cover_elem = item.ele('css:a.cover', timeout=1)
-                        if cover_elem:
-                            note_url = cover_elem.attr('href')
-                    
-                    if not note_url:
-                        self.logger.warning(f"Note {idx+1}: No URL found, skipping")
-                        continue
-                    
-                    # Ensure full URL
-                    if note_url.startswith('/'):
-                        note_url = 'https://www.xiaohongshu.com' + note_url
-                    elif not note_url.startswith('http'):
-                        note_url = 'https://www.xiaohongshu.com' + note_url
-                    
-                    # Extract note ID (supports both explore and user/profile formats)
-                    note_id_match = re.search(r'/([a-z0-9]{24})(?:\?|$)', note_url)
-                    if not note_id_match:
-                        self.logger.warning(f"Note {idx+1}: Cannot extract note ID from {note_url}")
-                        continue
-                    note_id = note_id_match.group(1)
-                    
-                    # Keep original URL (includes xsec_token etc, prevents redirect)
-                    explore_url = note_url
-                    self.logger.debug(f"Using original URL with auth params: {explore_url[:100]}...")
-                    
-                    # Determine if video (from list page)
-                    is_video = self._is_video_note_from_list(item)
-                    media_type = "Video" if is_video else "Photo"
-                    
-                    # Extract cover image (optional)
-                    cover_url = self._extract_cover_from_list(item)
-                    
-                    note_infos.append({
-                        'id': note_id,
-                        'title': title,
-                        'url': explore_url,  # Use standardized explore URL
-                        'is_video': is_video,
-                        'media_type': media_type,
-                        'cover_url': cover_url,
-                        'index': idx + 1
-                        # Don't save element reference to avoid connection issues
-                    })
-                    
-                    self.logger.info(f"Note {idx+1}/{len(note_items)}: [{media_type}] {title} ({note_id})")
-                    
-                except Exception as e:
-                    self.logger.error(f"Error extracting note {idx+1} info: {e}")
-                    continue
+                    seen_ids.add(info['id'])
+                    info['index'] = len(note_infos) + 1
+                    note_infos.append(info)
+                    self.logger.info(f"Note {info['index']}: [{info['media_type']}] {info['title']} ({info['id']})")
+                    if len(note_infos) >= max_notes:
+                        break
+                if len(note_infos) >= max_notes:
+                    break
+                idle = idle + 1 if len(note_infos) == before else 0
+                if idle >= 4:
+                    break
+                browser.scroll.down(1200)
+                time.sleep(random.uniform(1.0, 1.8))
+
+            if not saw_cards:
+                raise_no_content("xiaohongshu", browser)
             
             self.logger.info(f"Extracted {len(note_infos)} note infos from list page")
+            # Cards were there but none parsed (list layout changed): still empty.
+            if not note_infos:
+                raise_no_content("xiaohongshu", browser)
             
             # Process by type (if need detailed content, open detail page)
             for note_info in note_infos:
@@ -346,17 +267,65 @@ class XiaohongshuUserGenerator(BaseFeedGenerator):
                     else:
                         self.logger.warning(f"Failed: could not process note {note_info['index']}/{len(note_infos)}")
                     
+                except FetchBlocked:
+                    raise
                 except Exception as e:
                     self.logger.error(f"Error processing note {note_info['index']}: {e}")
                     import traceback
                     self.logger.error(traceback.format_exc())
                     continue
+
+            # Notes were listed but no detail page gave anything: not "nothing new".
+            if not articles:
+                raise_no_content("xiaohongshu", browser)
         
+        except FetchBlocked:
+            # Keep what was fetched before a mid-run block; report it if nothing was.
+            if not articles:
+                raise
         except Exception as e:
             self.logger.error(f"Error fetching notes from user {user_id}: {e}")
         
         return articles
     
+    def _note_info_from_card(self, item) -> Optional[dict]:
+        """One profile-list card -> {id, title, url, is_video, media_type, cover_url}; None if unusable."""
+        title_elem = item.ele('css:a.title', timeout=1)
+        if not title_elem:
+            return None
+
+        title_span = title_elem.ele('tag:span', timeout=1)
+        title = title_span.text.strip() if title_span else title_elem.text.strip()
+        if not title:
+            return None
+
+        note_url = title_elem.attr('href')
+        if not note_url:
+            cover_elem = item.ele('css:a.cover', timeout=1)
+            if cover_elem:
+                note_url = cover_elem.attr('href')
+        if not note_url:
+            return None
+
+        if not note_url.startswith('http'):
+            note_url = 'https://www.xiaohongshu.com' + note_url
+
+        # Extract note ID (supports both explore and user/profile formats)
+        note_id_match = re.search(r'/([a-z0-9]{24})(?:\?|$)', note_url)
+        if not note_id_match:
+            return None
+
+        # Keep the original URL (includes xsec_token etc, prevents redirect)
+        is_video = self._is_video_note_from_list(item)
+        return {
+            'id': note_id_match.group(1),
+            'title': title,
+            'url': note_url,
+            'is_video': is_video,
+            'media_type': "Video" if is_video else "Photo",
+            'cover_url': self._extract_cover_from_list(item),
+        }
+
     def _is_video_note_from_list(self, item) -> bool:
         """Detect if video note from list page"""
         try:
@@ -584,12 +553,6 @@ class XiaohongshuUserGenerator(BaseFeedGenerator):
             # Wait again to ensure rendering complete
             time.sleep(3)
             
-            # Check page status
-            html = new_tab.html
-            if "验证" in html or "滑块" in html:
-                self.logger.warning("Detected verification challenge")
-                return None
-            
             # Determine if video note
             is_video = self._check_if_video_note(new_tab)
             media_type = "Video" if is_video else "Photo"
@@ -600,6 +563,14 @@ class XiaohongshuUserGenerator(BaseFeedGenerator):
             
             # Extract media
             media_urls = self._extract_note_media(new_tab, note_id, is_video)
+
+            # Only when the note gave neither text nor media, check whether the page
+            # was a login or captcha wall; if so stop the run instead of hitting it
+            # again on every note.
+            if not description and not media_urls:
+                kind, detail = diagnose_empty_page(new_tab)
+                if kind != KIND_EMPTY:
+                    raise FetchBlocked("xiaohongshu", kind, detail)
             
             # Build Article
             article = self._build_article(
@@ -615,6 +586,8 @@ class XiaohongshuUserGenerator(BaseFeedGenerator):
             
             return article
             
+        except FetchBlocked:
+            raise
         except Exception as e:
             self.logger.error(f"Error fetching note in new tab: {e}")
             import traceback
