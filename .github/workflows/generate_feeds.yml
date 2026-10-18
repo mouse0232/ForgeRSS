@@ -27,6 +27,10 @@ env:
   CNINFO_DOWNLOAD_PDF: 'false'
   CNINFO_MAX_ITEMS: '30'
 
+concurrency:
+  group: generate-feeds
+  cancel-in-progress: false
+
 jobs:
   generate:
     runs-on: ubuntu-latest
@@ -68,7 +72,16 @@ jobs:
 
           if git diff --staged --quiet; then
             echo "No changes to commit"
-          else
-            git commit -m "Update CNInfo announcements feed [skip ci]"
-            git push
+            exit 0
           fi
+
+          git commit -m "Update CNInfo announcements feed [skip ci]"
+
+          for attempt in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed, retrying..."
+            sleep 5
+          done
+          exit 1

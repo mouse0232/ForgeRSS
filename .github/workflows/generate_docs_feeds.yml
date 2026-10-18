@@ -25,6 +25,10 @@ env:
   MAX_ARTICLES: ${{ vars.DOCS_MAX_ARTICLES || '300' }}
   LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
 
+concurrency:
+  group: generate-docs-feeds
+  cancel-in-progress: false
+
 jobs:
   generate-docs:
     runs-on: ubuntu-latest
@@ -73,7 +77,16 @@ jobs:
           
           if git diff --staged --quiet; then
             echo "No changes to commit"
-          else
-            git commit -m "Update AI coding docs RSS feeds [skip ci]"
-            git push
+            exit 0
           fi
+
+          git commit -m "Update AI coding docs RSS feeds [skip ci]"
+
+          for attempt in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed, retrying..."
+            sleep 5
+          done
+          exit 1

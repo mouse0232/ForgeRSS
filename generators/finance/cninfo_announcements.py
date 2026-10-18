@@ -142,7 +142,7 @@ class CninfoAnnouncementsGenerator(BaseFeedGenerator):
             
             if response.status_code == 200:
                 data = response.json()
-                announcements = data.get('announcements', [])
+                announcements = data.get('announcements') or []
                 
                 self.logger.info(f"Found {len(announcements)} announcements for keyword {keyword!r}")
                 
@@ -202,7 +202,7 @@ class CninfoAnnouncementsGenerator(BaseFeedGenerator):
             
             if response.status_code == 200:
                 data = response.json()
-                announcements = data.get('announcements', [])
+                announcements = data.get('announcements') or []
                 
                 self.logger.info(f"Found {len(announcements)} announcements for {MARKETS.get(market, market)}")
                 
