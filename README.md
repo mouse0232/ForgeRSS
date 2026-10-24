@@ -51,7 +51,8 @@
 | **Cursor Docs** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_cursor_docs.xml) |
 | **Qwen Code Docs** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_qwen_code_docs.xml) |
 | **IDSociety Science Speaks** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_idsociety.xml) |
-| **巨潮资讯网公司公告** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_cninfo_announcements.xml) |
+| **巨潮资讯网年报/半年报** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_cninfo_annual_reports.xml) |
+| **巨潮资讯网上新企业** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_cninfo_ipo.xml) |
 | **小宇宙播客（示例订阅）** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_xiaoyuzhou.xml) |
 | **雪球用户动态（示例订阅）** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_xueqiu_user.xml) |
 | **国家药监局药品公告** | 需本地运行（见下方说明） |
@@ -80,7 +81,8 @@
 | Qwen Code Docs | AI 编程工具 | curl_cffi | `feed_qwen_code_docs.xml` | **每周** | CI/本地 |
 | IDSociety Science Speaks | 医学 | Selenium | `feed_idsociety.xml` | 6小时 | CI/本地 |
 | **国家药监局 (NMPA)** | 政府 | **DrissionPage** | `feed_nmpa_drug.xml` | **手动** | **仅本地** |
-| 巨潮资讯网 | 金融 | curl_cffi | `feed_cninfo_announcements.xml` | 6小时 | CI/本地 |
+| 巨潮资讯网年报/半年报 | 金融 | curl_cffi | `feed_cninfo_annual_reports.xml` | 6小时 | CI/本地 |
+| 巨潮资讯网上新企业 | 金融 | curl_cffi | `feed_cninfo_ipo.xml` | 6小时 | CI/本地 |
 | **知乎热榜** | 社交媒体 | **DrissionPage + 登录** | `feed_zhihu_hot.xml` | **手动** | **仅本地** |
 | **知乎用户动态** | 社交媒体 | **DrissionPage + 登录** | `feed_zhihu_user.xml` | **手动** | **仅本地** |
 | **B 站 UP 主** | 社交媒体 | **DrissionPage + 登录** | `feed_bilibili_up.xml` | **手动** | **仅本地** |

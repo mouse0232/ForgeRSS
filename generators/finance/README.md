@@ -39,6 +39,7 @@ CNINFO_CATEGORY="category_ndbg_szsh;category_sjdbg_szsh" python scripts/run_sing
 | `category_bndbg_szsh` | 半年度报告 |
 | `category_yjdbg_szsh` | 一季度报告 |
 | `category_sjdbg_szsh` | 三季度报告 |
+| `category_sf_szsh` | 首发（上新企业） |
 | `category_yjygjxz_szsh` | 业绩预告 |
 | `category_gqjl_szsh` | 股权激励 |
 | `category_zj_szsh` | 增减持 |
@@ -71,9 +72,16 @@ python -m generators.finance.cninfo_announcements \
   --download-pdf                   # 同时下载 PDF
 ```
 
+CI 用两个独立 Action，分别覆盖输出文件名：
+
+- 年报/半年报：`CNINFO_CATEGORY=category_ndbg_szsh;category_bndbg_szsh` → `feeds/feed_cninfo_annual_reports.xml`
+- 上新企业：`CNINFO_CATEGORY=category_sf_szsh` → `feeds/feed_cninfo_ipo.xml`
+
+本地不设 `CNINFO_FEED_NAME` 时，仍输出 `feeds/feed_cninfo_announcements.xml`。
+
 ### 输出位置
 
-- **RSS Feed**：`feeds/feed_cninfo_announcements.xml`
+- **RSS Feed**：`feeds/feed_cninfo_announcements.xml`（可用 `CNINFO_FEED_NAME` 改文件名）
 - **PDF 文件**：`downloads/cninfo_pdfs/<公司名>_<股票代码>/<标题>.pdf`
 
 ### 频率建议

@@ -1,7 +1,8 @@
-# Generate CNInfo (巨潮资讯) announcements RSS feed on schedule
+# Generate CNInfo annual / semi-annual reports RSS feed on schedule
+# Categories: category_ndbg_szsh;category_bndbg_szsh
 # Default: every 6 hours
 
-name: Generate CNInfo Feed
+name: Generate CNInfo Annual Reports Feed
 
 on:
   schedule:
@@ -22,13 +23,15 @@ on:
 
 env:
   LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
-  # 巨潮：按分类抓全市场最新公告，CI 不持久化 PDF，关闭下载
-  CNINFO_CATEGORY: 'category_ndbg_szsh;category_bndbg_szsh;category_sf_szsh'
+  CNINFO_CATEGORY: 'category_ndbg_szsh;category_bndbg_szsh'
+  CNINFO_FEED_NAME: 'cninfo_annual_reports'
+  CNINFO_FEED_TITLE: '巨潮资讯网 - 年报/半年报'
+  CNINFO_FEED_DESCRIPTION: '沪深上市公司年度报告与半年度报告'
   CNINFO_DOWNLOAD_PDF: 'false'
   CNINFO_MAX_ITEMS: '30'
 
 concurrency:
-  group: generate-feeds
+  group: generate-cninfo-annual-reports
   cancel-in-progress: false
 
 jobs:
@@ -50,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run CNInfo generator
+      - name: Run CNInfo annual reports generator
         env:
           MAX_ARTICLES: ${{ github.event.inputs.max_articles || '50' }}
         run: |
@@ -61,21 +64,21 @@ jobs:
           fi
 
       - name: Validate feed
-        run: python scripts/validate_feeds.py feeds/feed_cninfo_announcements.xml
+        run: python scripts/validate_feeds.py feeds/feed_cninfo_annual_reports.xml
 
       - name: Commit and push
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-          git add feeds/feed_cninfo_announcements.xml
+          git add feeds/feed_cninfo_annual_reports.xml
 
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
           fi
 
-          git commit -m "Update CNInfo announcements feed [skip ci]"
+          git commit -m "Update CNInfo annual reports feed [skip ci]"
 
           for attempt in 1 2 3; do
             if git pull --rebase --autostash origin main && git push; then

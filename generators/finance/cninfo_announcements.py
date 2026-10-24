@@ -61,6 +61,12 @@ class CninfoAnnouncementsGenerator(BaseFeedGenerator):
         self.keywords = [k.strip() for k in keywords_raw.split(',') if k.strip()]
 
         self.category = os.getenv('CNINFO_CATEGORY', '').strip()
+        if os.getenv('CNINFO_FEED_NAME', '').strip():
+            self.FEED_NAME = os.getenv('CNINFO_FEED_NAME').strip()
+        if os.getenv('CNINFO_FEED_TITLE', '').strip():
+            self.FEED_TITLE = os.getenv('CNINFO_FEED_TITLE').strip()
+        if os.getenv('CNINFO_FEED_DESCRIPTION', '').strip():
+            self.FEED_DESCRIPTION = os.getenv('CNINFO_FEED_DESCRIPTION').strip()
         self.markets = [m.strip() for m in os.getenv('CNINFO_MARKETS', 'szse,sse').split(',') if m.strip()]
         self.days = int(os.getenv('CNINFO_DAYS', '7'))
         self.download_pdf = os.getenv('CNINFO_DOWNLOAD_PDF', 'true').lower() == 'true'
