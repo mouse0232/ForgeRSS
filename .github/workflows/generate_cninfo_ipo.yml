@@ -27,6 +27,7 @@ env:
   CNINFO_FEED_NAME: 'cninfo_ipo'
   CNINFO_FEED_TITLE: '巨潮资讯网 - 上新企业'
   CNINFO_FEED_DESCRIPTION: '沪深市场首发（上新）企业公告'
+  CNINFO_TITLE_CONTAINS: '招股说明书'
   CNINFO_DOWNLOAD_PDF: 'false'
   CNINFO_MAX_ITEMS: '30'
 

@@ -67,6 +67,7 @@ class CninfoAnnouncementsGenerator(BaseFeedGenerator):
             self.FEED_TITLE = os.getenv('CNINFO_FEED_TITLE').strip()
         if os.getenv('CNINFO_FEED_DESCRIPTION', '').strip():
             self.FEED_DESCRIPTION = os.getenv('CNINFO_FEED_DESCRIPTION').strip()
+        self.title_contains = os.getenv('CNINFO_TITLE_CONTAINS', '').strip()
         self.markets = [m.strip() for m in os.getenv('CNINFO_MARKETS', 'szse,sse').split(',') if m.strip()]
         self.days = int(os.getenv('CNINFO_DAYS', '7'))
         self.download_pdf = os.getenv('CNINFO_DOWNLOAD_PDF', 'true').lower() == 'true'
@@ -177,51 +178,69 @@ class CninfoAnnouncementsGenerator(BaseFeedGenerator):
         end_date = datetime.now().strftime('%Y-%m-%d')
         start_date = (datetime.now() - timedelta(days=self.days)).strftime('%Y-%m-%d')
 
-        payload = {
-            'pageNum': 1,
-            'pageSize': min(self.max_items, 30),
-            'column': market,
-            'tabName': 'fulltext',
-            'plate': '',
-            'stock': '',
-            'searchkey': '',
-            'secid': '',
-            'category': category,
-            'trade': '',
-            'seDate': f'{start_date}~{end_date}',
-        }
-        
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
             'X-Requested-With': 'XMLHttpRequest',
             'Referer': 'http://www.cninfo.com.cn/'
         }
-        
+
+        page_num = 1
+        page_size = 30
+        max_pages = 10
+
         try:
-            response = requests.post(
-                CNINFO_API_URL,
-                data=payload,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                announcements = data.get('announcements') or []
-                
-                self.logger.info(f"Found {len(announcements)} announcements for {MARKETS.get(market, market)}")
-                
+            while len(articles) < self.max_items and page_num <= max_pages:
+                payload = {
+                    'pageNum': page_num,
+                    'pageSize': page_size,
+                    'column': market,
+                    'tabName': 'fulltext',
+                    'plate': '',
+                    'stock': '',
+                    'searchkey': '',
+                    'secid': '',
+                    'category': category,
+                    'trade': '',
+                    'seDate': f'{start_date}~{end_date}',
+                }
+
+                response = requests.post(
+                    CNINFO_API_URL,
+                    data=payload,
+                    headers=headers,
+                    timeout=30
+                )
+
+                if response.status_code != 200:
+                    self.logger.error(f"Request failed: {response.status_code}")
+                    break
+
+                announcements = (response.json().get('announcements') or [])
+                self.logger.info(
+                    f"Found {len(announcements)} announcements for "
+                    f"{MARKETS.get(market, market)} page {page_num}"
+                )
+
+                if not announcements:
+                    break
+
                 for ann in announcements:
                     article = self._parse_announcement(ann)
                     if article:
                         articles.append(article)
-            else:
-                self.logger.error(f"Request failed: {response.status_code}")
-        
+                        if len(articles) >= self.max_items:
+                            break
+
+                if len(announcements) < page_size:
+                    break
+
+                page_num += 1
+                time.sleep(self.request_interval)
+
         except Exception as e:
             self.logger.error(f"Error fetching market {market}: {e}")
-        
+
         return articles
     
     def _parse_announcement(self, ann: Dict) -> Optional[Article]:
@@ -231,6 +250,8 @@ class CninfoAnnouncementsGenerator(BaseFeedGenerator):
             sec_code = ann.get('secCode', '')
             sec_name = ann.get('secName', '')
             title = ann.get('announcementTitle', '')
+            if self.title_contains and self.title_contains not in title:
+                return None
             ann_time = ann.get('announcementTime')
             
             # Convert timestamp (milliseconds)

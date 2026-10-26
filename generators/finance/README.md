@@ -75,7 +75,7 @@ python -m generators.finance.cninfo_announcements \
 CI 用两个独立 Action，分别覆盖输出文件名：
 
 - 年报/半年报：`CNINFO_CATEGORY=category_ndbg_szsh;category_bndbg_szsh` → `feeds/feed_cninfo_annual_reports.xml`
-- 上新企业：`CNINFO_CATEGORY=category_sf_szsh` → `feeds/feed_cninfo_ipo.xml`
+- 上新企业：`CNINFO_CATEGORY=category_sf_szsh`，标题须含「招股说明书」 → `feeds/feed_cninfo_ipo.xml`
 
 本地不设 `CNINFO_FEED_NAME` 时，仍输出 `feeds/feed_cninfo_announcements.xml`。
 
