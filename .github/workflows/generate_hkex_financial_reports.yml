@@ -1,0 +1,87 @@
+# Generate HKEXnews financial reports RSS feed on schedule
+# Default t2 codes: annual / interim reports, final / interim / quarterly results
+# Default: every 6 hours
+
+name: Generate HKEXnews Financial Reports Feed
+
+on:
+  schedule:
+    # Every 6 hours (0:00, 6:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      full_refresh:
+        description: 'Full refresh (ignore cache)'
+        required: false
+        default: false
+        type: boolean
+      max_articles:
+        description: 'Max articles in the feed'
+        required: false
+        default: '50'
+        type: string
+
+env:
+  LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
+  HKEX_DOWNLOAD_PDF: 'false'
+  HKEX_MAX_ITEMS: '30'
+  HKEX_MAX_PAGES: '1'
+
+concurrency:
+  group: generate-hkex-financial-reports
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run HKEXnews financial reports generator
+        env:
+          MAX_ARTICLES: ${{ github.event.inputs.max_articles || '50' }}
+        run: |
+          if [ "${{ github.event.inputs.full_refresh }}" = "true" ]; then
+            python scripts/run_single.py hkex_financial_reports --full --max $MAX_ARTICLES
+          else
+            python scripts/run_single.py hkex_financial_reports --max $MAX_ARTICLES
+          fi
+
+      - name: Validate feed
+        run: python scripts/validate_feeds.py feeds/feed_hkex_financial_reports.xml
+
+      - name: Commit and push
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          git add feeds/feed_hkex_financial_reports.xml
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Update HKEXnews financial reports feed [skip ci]"
+
+          for attempt in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed, retrying..."
+            sleep 5
+          done
+          exit 1

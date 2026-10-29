@@ -53,6 +53,7 @@
 | **IDSociety Science Speaks** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_idsociety.xml) |
 | **巨潮资讯网年报/半年报** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_cninfo_annual_reports.xml) |
 | **巨潮资讯网上新企业** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_cninfo_ipo.xml) |
+| **披露易港股财报** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_hkex_financial_reports.xml) |
 | **小宇宙播客（示例订阅）** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_xiaoyuzhou.xml) |
 | **雪球用户动态（示例订阅）** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_xueqiu_user.xml) |
 | **国家药监局药品公告** | 需本地运行（见下方说明） |
@@ -83,6 +84,7 @@
 | **国家药监局 (NMPA)** | 政府 | **DrissionPage** | `feed_nmpa_drug.xml` | **手动** | **仅本地** |
 | 巨潮资讯网年报/半年报 | 金融 | curl_cffi | `feed_cninfo_annual_reports.xml` | 6小时 | CI/本地 |
 | 巨潮资讯网上新企业 | 金融 | curl_cffi | `feed_cninfo_ipo.xml` | 6小时 | CI/本地 |
+| 披露易港股财报 | 金融 | requests | `feed_hkex_financial_reports.xml` | 6小时 | CI/本地 |
 | **知乎热榜** | 社交媒体 | **DrissionPage + 登录** | `feed_zhihu_hot.xml` | **手动** | **仅本地** |
 | **知乎用户动态** | 社交媒体 | **DrissionPage + 登录** | `feed_zhihu_user.xml` | **手动** | **仅本地** |
 | **B 站 UP 主** | 社交媒体 | **DrissionPage + 登录** | `feed_bilibili_up.xml` | **手动** | **仅本地** |
@@ -401,6 +403,22 @@ PDF 自动归档到 `downloads/cninfo_pdfs/<公司名>_<股票代码>/<标题>.p
 
 ---
 
+## 披露易（港股财报）
+
+从港交所披露易最新上市公司信息 JSON 拉取年报、中期报告与业绩公告（详见 [`generators/finance/README.md`](generators/finance/README.md)）：
+
+```bash
+python scripts/run_single.py hkex_financial_reports --max 20
+
+HKEX_STOCKS=700 python scripts/run_single.py hkex_financial_reports
+
+HKEX_DOWNLOAD_PDF=true python scripts/run_single.py hkex_financial_reports
+```
+
+PDF 归档到 `downloads/hkex_pdfs/<公司名>_<股票代码>/<标题>.pdf`。默认不下载附件。
+
+---
+
 ## 雪球用户动态订阅（**无需登录 / 无需浏览器登录**）
 
 雪球用户主页走的是阿里云 WAF，不能直接 curl 抓。用 DrissionPage **headless** 模式启动一次真实 Chrome 进程过 WAF 拿到 HTML，再解析时间线。整个流程不需要登录态、不需要 cookie、不依赖 Display，**CI 可跑**。
@@ -547,6 +565,7 @@ forgerss/
 │   │   └── nmpa_drug.py       # 国家药监局（需桌面环境）
 │   ├── finance/               # 金融/公司公告
 │   │   ├── cninfo_announcements.py
+│   │   ├── hkex_financial_reports.py
 │   │   └── xueqiu/            # 雪球用户动态（无需登录）
 │   ├── social/                # 社交媒体（每平台一个目录，scraper+generator）
 │   │   ├── base/              # 通用下载工具

@@ -93,3 +93,34 @@ CI 用两个独立 Action，分别覆盖输出文件名：
 ### 风险提示
 
 ⚠️ 仅供个人学习使用，不得用于商业目的。建议控制请求频率，避免被封 IP。
+
+## 披露易港股财报订阅
+
+从港交所披露易最新上市公司信息 JSON 拉取呈交，默认只保留年报、中期/半年度报告、末期业绩、中期业绩、季度业绩。
+
+```bash
+python scripts/run_single.py hkex_financial_reports
+
+python -m generators.finance.hkex_financial_reports \
+  --stocks "700,941" \
+  --days 7 \
+  --max 30
+```
+
+| 环境变量 | 默认 | 含义 |
+|---|---|---|
+| `HKEX_T2_CODES` | `40100,40200,13300,13400,13600` | 二级标题代码白名单 |
+| `HKEX_KEYWORDS` | 空 | 标题或类别文本关键词 |
+| `HKEX_STOCKS` | 空 | 股份代号，去前导零比较 |
+| `HKEX_DAYS` | 7 | 相对发放日的天数窗 |
+| `HKEX_MAX_ITEMS` | 50 | Feed 条数上限 |
+| `HKEX_MAX_PAGES` | 1 | 最多拉取的 JSON 页数 |
+| `HKEX_DOWNLOAD_PDF` | false | 是否下载 PDF |
+| `HKEX_REQUEST_INTERVAL` | 1.0 | 翻页间隔秒 |
+
+输出：
+
+- RSS Feed：`feeds/feed_hkex_financial_reports.xml`
+- PDF（可选）：`downloads/hkex_pdfs/<公司名>_<股票代码>/<标题>.pdf`
+
+标题类别数字码见 `.monkeycode/specs/2026-10-28-hkex-financial-reports/hkexnews-search-filter.md`。
