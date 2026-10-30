@@ -405,7 +405,7 @@ PDF 自动归档到 `downloads/cninfo_pdfs/<公司名>_<股票代码>/<标题>.p
 
 ## 披露易（港股财报）
 
-从港交所披露易最新上市公司信息 JSON 拉取年报、中期报告与业绩公告（详见 [`generators/finance/README.md`](generators/finance/README.md)）：
+从港交所披露易最新上市公司信息 JSON 拉取年报、中期报告与招股/上市文件（详见 [`generators/finance/README.md`](generators/finance/README.md)）：
 
 ```bash
 python scripts/run_single.py hkex_financial_reports --max 20

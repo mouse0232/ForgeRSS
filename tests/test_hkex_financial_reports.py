@@ -59,9 +59,9 @@ QUARTERLY_RESULTS = {
 
 MULTI_STOCK_HTM = {
     "newsId": 12380003,
-    "title": "末期業績",
-    "lTxt": "公告及通告 - [末期業績]",
-    "sTxt": "公告及通告 - [末期業績]",
+    "title": "全球發售",
+    "lTxt": "上市文件 - [發售以供認購]",
+    "sTxt": "上市文件 - [發售以供認購]",
     "ext": "htm",
     "size": "88KB",
     "webPath": "/listedco/listconews/sehk/2026/1028/2026102800200_c.htm",
@@ -72,10 +72,43 @@ MULTI_STOCK_HTM = {
         {"sc": "83690", "sn": "美團－ＷＲ"},
     ],
     "relTime": "28/10/2026 18:00",
-    "t1Code": "10000",
-    "t2Code": "13300,13250",
+    "t1Code": "30000",
+    "t2Code": "30700",
     "dod": "N",
     "dodPath": "NaN",
+}
+
+PROSPECTUS = {
+    "newsId": 12380005,
+    "title": "全球發售",
+    "lTxt": "上市文件 - [發售以供認購]",
+    "sTxt": "上市文件 - [發售以供認購]",
+    "ext": "pdf",
+    "size": "12MB",
+    "webPath": "/listedco/listconews/sehk/2026/1030/2026103000100_c.pdf",
+    "market": "SEHK",
+    "multi": 0,
+    "stock": [{"sc": "07672", "sn": "芯德半導體"}],
+    "relTime": "30/10/2026 06:23",
+    "t1Code": "30000",
+    "t2Code": "30700",
+    "dod": "N",
+    "dodPath": "NaN",
+}
+
+INTRODUCTION_LISTING = {
+    "newsId": 12380006,
+    "title": "以介紹方式於香港聯合交易所有限公司主板上市",
+    "lTxt": "上市文件 - [介紹]",
+    "sTxt": "上市文件 - [介紹]",
+    "ext": "pdf",
+    "size": "8MB",
+    "webPath": "/listedco/listconews/sehk/2026/1030/2026103000200_c.pdf",
+    "market": "SEHK",
+    "stock": [{"sc": "01821", "sn": "中旅港澳"}],
+    "relTime": "30/10/2026 07:14",
+    "t1Code": "30000",
+    "t2Code": "30500",
 }
 
 MISSING_WEBPATH = {
@@ -183,7 +216,7 @@ def test_safe_filename_strips_illegal_chars_and_caps_length():
 
 
 def test_default_t2_codes():
-    assert DEFAULT_T2_CODES == {"40100", "40200", "13300", "13400", "13600"}
+    assert DEFAULT_T2_CODES == {"40100", "40200", "30500", "30600", "30700"}
 
 
 def test_parse_annual_report_fields(gen):
@@ -206,7 +239,7 @@ def test_parse_annual_report_fields(gen):
 def test_parse_multi_stock_and_multi_t2(gen):
     article = gen._parse_item(MULTI_STOCK_HTM)
     assert article is not None
-    assert article.title == "[美團－Ｗ、美團－ＷＲ] 末期業績"
+    assert article.title == "[美團－Ｗ、美團－ＷＲ] 全球發售"
     assert article.url.endswith("_c.htm")
     assert "03690" in article.content
     assert "83690" in article.content
@@ -221,15 +254,18 @@ def test_parse_missing_webpath_falls_back_to_newsid(gen):
 
 def test_default_filter_keeps_financial_reports(gen):
     assert gen._match_filters(ANNUAL_REPORT) is True
-    assert gen._match_filters(QUARTERLY_RESULTS) is True
-    assert gen._match_filters(MULTI_STOCK_HTM) is True
     assert gen._match_filters(MISSING_WEBPATH) is True
+    assert gen._match_filters(PROSPECTUS) is True
+    assert gen._match_filters(INTRODUCTION_LISTING) is True
+    assert gen._match_filters(MULTI_STOCK_HTM) is True
 
 
-def test_default_filter_excludes_non_financial(gen):
+def test_default_filter_excludes_results_and_non_financial(gen):
+    assert gen._match_filters(QUARTERLY_RESULTS) is False
     assert gen._match_filters(SUSPENSION) is False
     assert gen._match_filters(NEXT_DAY_DISCLOSURE) is False
     assert gen._match_filters(ESG_REPORT) is False
+    assert gen._parse_item(QUARTERLY_RESULTS) is None
     assert gen._parse_item(SUSPENSION) is None
     assert gen._parse_item(NEXT_DAY_DISCLOSURE) is None
     assert gen._parse_item(ESG_REPORT) is None
@@ -252,16 +288,16 @@ def test_stock_filter_matches_without_leading_zeros(tmp_path, monkeypatch):
     monkeypatch.setenv("HKEX_REQUEST_INTERVAL", "0")
     filtered = HkexFinancialReportsGenerator(base_dir=tmp_path)
     assert filtered._match_filters(ANNUAL_REPORT) is True
-    assert filtered._match_filters(QUARTERLY_RESULTS) is False
+    assert filtered._match_filters(PROSPECTUS) is False
 
 
 def test_keyword_filter_matches_title_or_ltxt(tmp_path, monkeypatch):
-    monkeypatch.setenv("HKEX_KEYWORDS", "季度")
+    monkeypatch.setenv("HKEX_KEYWORDS", "中期")
     monkeypatch.setenv("HKEX_DAYS", "36500")
     monkeypatch.setenv("HKEX_DOWNLOAD_PDF", "false")
     monkeypatch.setenv("HKEX_REQUEST_INTERVAL", "0")
     filtered = HkexFinancialReportsGenerator(base_dir=tmp_path)
-    assert filtered._match_filters(QUARTERLY_RESULTS) is True
+    assert filtered._match_filters(MISSING_WEBPATH) is True
     assert filtered._match_filters(ANNUAL_REPORT) is False
 
 
@@ -325,7 +361,7 @@ def test_pagination_requests_until_max_file(gen):
     page1 = {
         "genDate": 1,
         "maxNumOfFile": 2,
-        "newsInfoLst": [ANNUAL_REPORT, QUARTERLY_RESULTS] + fillers,
+        "newsInfoLst": [ANNUAL_REPORT, PROSPECTUS] + fillers,
     }
     page2 = {
         "genDate": 1,

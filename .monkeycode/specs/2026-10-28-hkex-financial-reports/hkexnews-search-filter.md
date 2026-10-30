@@ -373,7 +373,7 @@ callback({"more":"1","stockInfo":[{"stockId":7609,"code":"00700","name":"騰訊�
 |---|---|---|---|
 | 40100 | 年報 | Annual Report | 默认收录 |
 | 40200 | 中期/半年度報告 | Interim/Half-Year Report | 默认收录 |
-| 40300 | 季度報告 | Quarterly Report | 默认排除。官方 count 长期为 0，港股季报走 13600 |
+| 40300 | 季度報告 | Quarterly Report | 默认排除。官方 count 长期为 0 |
 | 40400 | 環境、社會及管治資料/報告 | ESG Information/Report | 默认排除 |
 
 ### 5.2 公告及通告 / 财务资料（t1=10000, t2G=3）
@@ -385,13 +385,13 @@ callback({"more":"1","stockInfo":[{"stockId":7609,"code":"00700","name":"騰訊�
 | 13200 | 延遲發表業績公告 | Delay in Results Announcement | 排除 |
 | 13250 | 股息或分派 | Dividend or Distribution | 排除 |
 | 13251 | 股息或分派（公告表格） | Dividend or Distribution (Announcement Form) | 排除 |
-| 13300 | 末期業績 | Final Results | 默认收录 |
+| 13300 | 末期業績 | Final Results | 排除 |
 | 13350 | 向聯屬公司提供財務資助及/或作出擔保 | Financial Assistance and/or Guarantee to Affiliated Company | 排除 |
-| 13400 | 中期業績 | Interim Results | 默认收录 |
+| 13400 | 中期業績 | Interim Results | 排除 |
 | 13450 | 資產淨值 | Net Asset Value | 排除（基金/REIT 净值） |
 | 13500 | 盈利警告 | Profit Warning | 排除 |
 | 13550 | 核數師發出「非標準報告」 | Modified Report by Auditors | 排除 |
-| 13600 | 季度業績 | Quarterly Results | 默认收录 |
+| 13600 | 季度業績 | Quarterly Results | 排除 |
 | 13650 | 附屬公司的業績 | Results of a Subsidiary | 排除 |
 | 13700 | 修訂已刊發初步業績的資料 | Revision of Information in Published Preliminary Results | 排除，可用 `HKEX_T2_CODES` 打开 |
 | 13750 | 修正重大錯誤而作出的前期調整 | Prior Period Adjustments due to Correction of Material Errors | 排除 |
@@ -415,22 +415,33 @@ callback({"more":"1","stockInfo":[{"stockId":7609,"code":"00700","name":"騰訊�
 | 50300 | 在場內出售庫存股份 |
 | 50400 | 修正過往報表 |
 
+### 5.3a 上市文件 / 招股章程（t1=30000）
+
+官方没有单独的「招股说明书」码。IPO 招股文件打在这一级：
+
+| t2Code | 繁中 | English | 本项目 |
+|---|---|---|---|
+| 30500 | 介紹 | Introduction | 默认收录 |
+| 30600 | 發售現有證券 | Offer for Sale | 默认收录 |
+| 30700 | 發售以供認購 | Offer for Subscription | 默认收录（全球发售） |
+| 30800 | 公開招股 | Open Offer | 排除（再融资） |
+| 31100 | 供股 | Rights Issue | 排除（再融资） |
+| 31200 | 補充上市文件 | Supplementary Listing Document | 排除 |
+
 ### 5.4 默认 Feed 的匹配规则
 
 目标二级集合：
 
 ```text
-40100, 40200, 13300, 13400, 13600
+40100, 40200, 30500, 30600, 30700
 ```
 
 算法：把条目 `t2Code` 按逗号拆分，与目标集合求交，非空即命中。不要再对 `title` / `lTxt` 做正则二次清洗。
 
-原因：`13300` 也会打在「年报补充公告」这类后续文件上，这是发行人自选标题类别的结果。按代码收录，行为可预期；用标题正则会把合法补充件丢掉，也会把未打码的杂项误收进来。
-
 覆盖范围可以用环境变量改，不必改代码：
 
 ```text
-HKEX_T2_CODES=40100,40200,40300,13300,13400,13600,13700,13800
+HKEX_T2_CODES=40100,40200,30500,30600,30700,13300
 ```
 
 ---
@@ -456,7 +467,7 @@ HKEX_T2_CODES=40100,40200,40300,13300,13400,13600,13700,13800
 
 | 环境变量 | 默认 | 含义 |
 |---|---|---|
-| `HKEX_T2_CODES` | `40100,40200,13300,13400,13600` | 二级码白名单 |
+| `HKEX_T2_CODES` | `40100,40200,30500,30600,30700` | 二级码白名单 |
 | `HKEX_KEYWORDS` | 空 | 标题/lTxt 关键词，额外收窄 |
 | `HKEX_STOCKS` | 空 | 股份代号，去前导零比较 |
 | `HKEX_DAYS` | 7 | 相对 `relTime` 的天数窗 |

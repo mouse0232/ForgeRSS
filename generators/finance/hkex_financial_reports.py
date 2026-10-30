@@ -21,7 +21,7 @@ JSON_URL_TEMPLATE = (
 FALLBACK_URL_TEMPLATE = "https://www.hkexnews.hk/#newsId={news_id}"
 HK_TZ = pytz.timezone("Asia/Hong_Kong")
 
-DEFAULT_T2_CODES = {"40100", "40200", "13300", "13400", "13600"}
+DEFAULT_T2_CODES = {"40100", "40200", "30500", "30600", "30700"}
 PAGE_CAPACITY = 500
 
 REQUEST_HEADERS = {

@@ -4,13 +4,13 @@
 
 ForgeRSS 已支持巨潮资讯网（A 股）公司公告 RSS。本需求新增港交所披露易（HKEXnews）港股财报 RSS：从披露易最新上市公司信息 JSON 拉取公告，筛选财务报告类文件，生成与巨潮公告生成器同构的 RSS Feed，并可选下载附件。
 
-数据源为披露易公开 JSON：`https://www1.hkexnews.hk/ncms/json/eds/lcisehk7relsdc_1.json`（分页文件名为 `lcisehk7relsdc_{n}.json`）。该接口返回主板/GEM 最新呈交文件，其中包含年报、中期报告、末期/中期/季度业绩等财报类条目，也包含停牌、通函、翌日披露报表等非财报条目。系统默认只输出财报类条目。
+数据源为披露易公开 JSON：`https://www1.hkexnews.hk/ncms/json/eds/lcisehk7relsdc_1.json`（分页文件名为 `lcisehk7relsdc_{n}.json`）。该接口返回主板/GEM 最新呈交文件。系统默认只输出年报、中期报告，以及招股/上市文件。
 
 ## Glossary
 
 - **System**: ForgeRSS 及其财经 RSS 生成器子系统。
 - **HKEXnews JSON**: 港交所披露易最新上市公司信息接口，路径模式为 `/ncms/json/eds/lcisehk7relsdc_{n}.json`。
-- **财报条目**: 满足预设一级/二级标题类别（t1Code / t2Code）或用户配置过滤条件的财务报告类呈交文件，包括年报、中期报告、末期业绩、中期业绩、季度业绩。
+- **财报条目**: 满足预设二级标题类别（t2Code）或用户配置过滤条件的呈交文件，默认包括年报、中期报告，以及招股/上市文件。
 - **Article**: `generators.base.Article`，RSS 条目的标准数据模型。
 - **Feed**: 系统生成的 RSS 2.0 文件，默认路径为 `feeds/feed_hkex_financial_reports.xml`。
 - **附件**: 财报条目对应的 PDF 或 HTM 原文文件。
@@ -30,11 +30,11 @@ ForgeRSS 已支持巨潮资讯网（A 股）公司公告 RSS。本需求新增�
 
 ### Requirement 2: 财报筛选
 
-**User Story:** AS 财经信息订阅者, I want 默认只看到年报、中期报告和业绩公告, so that Feed 不被停牌、通函、翌日披露报表淹没。
+**User Story:** AS 财经信息订阅者, I want 默认只看到年报、中期报告和招股文件, so that Feed 不被停牌、通函、翌日披露报表淹没。
 
 #### Acceptance Criteria
 
-1. WHEN 未配置自定义过滤条件, the System SHALL 仅保留满足下列任一条件的条目：`t1Code` 为 `40000` 且 `t2Code` 包含 `40100`（年报）或 `40200`（中期报告）；或 `t1Code` 为 `10000` 且 `t2Code` 包含 `13300`（末期业绩）、`13400`（中期业绩）或 `13600`（季度业绩）。
+1. WHEN 未配置自定义过滤条件, the System SHALL 仅保留满足下列任一条件的条目：`t2Code` 包含 `40100`（年报）、`40200`（中期/半年度报告）、`30700`（发售以供认购）、`30500`（介绍上市）或 `30600`（发售现有证券）。
 2. WHEN 环境变量 `HKEX_T2_CODES` 已设置, the System SHALL 改为按该逗号分隔的二级标题代码列表过滤。
 3. WHEN 环境变量 `HKEX_KEYWORDS` 已设置, the System SHALL 仅保留标题 `title` 或类别文本 `lTxt` 包含任一关键词的条目。
 4. WHEN 环境变量 `HKEX_STOCKS` 已设置, the System SHALL 仅保留 `stock[].sc` 命中该逗号分隔股票代码列表的条目（代码按去前导零后比较，例如 `00700` 与 `700` 视为同一代码）。

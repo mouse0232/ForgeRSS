@@ -1,5 +1,5 @@
 # Generate HKEXnews financial reports RSS feed on schedule
-# Default t2 codes: annual / interim reports, final / interim / quarterly results
+# Default t2 codes: annual / interim reports, IPO listing documents
 # Default: every 6 hours
 
 name: Generate HKEXnews Financial Reports Feed
