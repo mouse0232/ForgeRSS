@@ -181,7 +181,7 @@ https://www1.hkexnews.hk{webPath}
 | 13500 | 盈利警告 | 预告 |
 | 30800 / 31100 | 公开招股 / 供股 | 再融资，不是 IPO 招股章程 |
 
-过滤优先级：若设置了 `HKEX_T2_CODES`，用该列表替换默认集合；`HKEX_KEYWORDS` 与 `HKEX_STOCKS` 在类别过滤之后叠加，均为「保留命中项」。
+过滤优先级：`HKEX_T1_CODES` / `HKEX_T2_CODES` 直接传入数字码。任一已设置则用传入值替换默认集合；只设其中一项时，另一项不限制。`HKEX_KEYWORDS` 与 `HKEX_STOCKS` 在类别过滤之后叠加，均为「保留命中项」。
 
 ### Article 映射
 

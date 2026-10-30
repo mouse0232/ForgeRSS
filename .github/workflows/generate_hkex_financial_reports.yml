@@ -1,5 +1,5 @@
 # Generate HKEXnews financial reports RSS feed on schedule
-# Default t2 codes: annual / interim reports, IPO listing documents
+# Filter by t1/t2 codes via HKEX_T1_CODES / HKEX_T2_CODES
 # Default: every 6 hours
 
 name: Generate HKEXnews Financial Reports Feed
@@ -23,6 +23,7 @@ on:
 
 env:
   LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
+  HKEX_T2_CODES: '40100,40200,30500,30600,30700'
   HKEX_DOWNLOAD_PDF: 'false'
   HKEX_MAX_ITEMS: '30'
   HKEX_MAX_PAGES: '1'

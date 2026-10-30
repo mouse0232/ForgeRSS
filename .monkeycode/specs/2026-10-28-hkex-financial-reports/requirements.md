@@ -34,8 +34,8 @@ ForgeRSS 已支持巨潮资讯网（A 股）公司公告 RSS。本需求新增�
 
 #### Acceptance Criteria
 
-1. WHEN 未配置自定义过滤条件, the System SHALL 仅保留满足下列任一条件的条目：`t2Code` 包含 `40100`（年报）、`40200`（中期/半年度报告）、`30700`（发售以供认购）、`30500`（介绍上市）或 `30600`（发售现有证券）。
-2. WHEN 环境变量 `HKEX_T2_CODES` 已设置, the System SHALL 改为按该逗号分隔的二级标题代码列表过滤。
+1. WHEN 未配置 `HKEX_T1_CODES` 与 `HKEX_T2_CODES`, the System SHALL 仅保留 `t2Code` 命中默认集合 `40100,40200,30500,30600,30700` 的条目。
+2. WHEN 环境变量 `HKEX_T1_CODES` 或 `HKEX_T2_CODES` 已设置, the System SHALL 按该逗号分隔的一级/二级标题代码列表过滤；只设其中一项时，另一项不限制。
 3. WHEN 环境变量 `HKEX_KEYWORDS` 已设置, the System SHALL 仅保留标题 `title` 或类别文本 `lTxt` 包含任一关键词的条目。
 4. WHEN 环境变量 `HKEX_STOCKS` 已设置, the System SHALL 仅保留 `stock[].sc` 命中该逗号分隔股票代码列表的条目（代码按去前导零后比较，例如 `00700` 与 `700` 视为同一代码）。
 5. WHEN 同一 `newsId` 或同一附件 URL 在本次拉取中重复出现, the System SHALL 只保留一条。

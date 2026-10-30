@@ -405,14 +405,15 @@ PDF 自动归档到 `downloads/cninfo_pdfs/<公司名>_<股票代码>/<标题>.p
 
 ## 披露易（港股财报）
 
-从港交所披露易最新上市公司信息 JSON 拉取年报、中期报告与招股/上市文件（详见 [`generators/finance/README.md`](generators/finance/README.md)）：
+从港交所披露易最新上市公司信息 JSON 拉取呈交，用 t1 / t2 代码筛选（详见 [`generators/finance/README.md`](generators/finance/README.md)）：
 
 ```bash
-python scripts/run_single.py hkex_financial_reports --max 20
+HKEX_T2_CODES=40100,40200,30500,30600,30700 \
+  python scripts/run_single.py hkex_financial_reports --max 20
+
+HKEX_T1_CODES=40000 python scripts/run_single.py hkex_financial_reports
 
 HKEX_STOCKS=700 python scripts/run_single.py hkex_financial_reports
-
-HKEX_DOWNLOAD_PDF=true python scripts/run_single.py hkex_financial_reports
 ```
 
 PDF 归档到 `downloads/hkex_pdfs/<公司名>_<股票代码>/<标题>.pdf`。默认不下载附件。

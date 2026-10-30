@@ -84,7 +84,7 @@ class HkexFinancialReportsGenerator(BaseFeedGenerator):
     FEED_NAME = "hkex_financial_reports"
     FEED_TITLE = "披露易 - 港股财报"
     FEED_URL = "https://www.hkexnews.hk/"
-    FEED_DESCRIPTION = "港交所披露易上市公司财务报告与业绩公告"
+    FEED_DESCRIPTION = "港交所披露易上市公司年报、中期报告与招股/上市文件"
     FEED_LANGUAGE = "zh-HK"
 
     def __init__(self, base_dir: Path = None):
@@ -97,8 +97,14 @@ class HkexFinancialReportsGenerator(BaseFeedGenerator):
 
         super().__init__(base_dir=base_dir)
 
+        t1_raw = _parse_csv_env("HKEX_T1_CODES")
         t2_raw = _parse_csv_env("HKEX_T2_CODES")
-        self.t2_codes = set(t2_raw) if t2_raw else set(DEFAULT_T2_CODES)
+        if t1_raw or t2_raw:
+            self.t1_codes = set(t1_raw)
+            self.t2_codes = set(t2_raw)
+        else:
+            self.t1_codes = set()
+            self.t2_codes = set(DEFAULT_T2_CODES)
         self.keywords = _parse_csv_env("HKEX_KEYWORDS")
         self.stocks = {normalize_stock_code(code) for code in _parse_csv_env("HKEX_STOCKS")}
         self.stocks.discard("")
@@ -185,8 +191,11 @@ class HkexFinancialReportsGenerator(BaseFeedGenerator):
         return items, max_num
 
     def _match_filters(self, item: dict) -> bool:
+        item_t1 = split_t2_codes(item.get("t1Code"))
         item_t2 = split_t2_codes(item.get("t2Code"))
-        if not (item_t2 & self.t2_codes):
+        if self.t1_codes and not (item_t1 & self.t1_codes):
+            return False
+        if self.t2_codes and not (item_t2 & self.t2_codes):
             return False
 
         if self.keywords:
@@ -349,7 +358,8 @@ def main():
     parser = argparse.ArgumentParser(description="HKEXnews financial reports RSS")
     parser.add_argument("--stocks", help="股份代号，逗号分隔（如 700,941）")
     parser.add_argument("--keywords", help="标题/类别关键词，逗号分隔")
-    parser.add_argument("--t2-codes", help="二级标题代码，逗号分隔")
+    parser.add_argument("--t1-codes", help="一级标题代码，逗号分隔（如 40000,30000）")
+    parser.add_argument("--t2-codes", help="二级标题代码，逗号分隔（如 40100,40200）")
     parser.add_argument("--days", type=int, default=None, help="最近 N 天")
     parser.add_argument("--max", type=int, default=5, help="最多获取多少条")
     parser.add_argument("--download-pdf", action="store_true", help="下载 PDF")
@@ -360,6 +370,8 @@ def main():
         os.environ["HKEX_STOCKS"] = args.stocks
     if args.keywords:
         os.environ["HKEX_KEYWORDS"] = args.keywords
+    if args.t1_codes:
+        os.environ["HKEX_T1_CODES"] = args.t1_codes
     if args.t2_codes:
         os.environ["HKEX_T2_CODES"] = args.t2_codes
     if args.days is not None:

@@ -96,12 +96,18 @@ CI 用两个独立 Action，分别覆盖输出文件名：
 
 ## 披露易港股财报订阅
 
-从港交所披露易最新上市公司信息 JSON 拉取呈交，默认只保留年报、中期/半年度报告，以及招股/上市文件（发售以供认购、介绍上市、发售现有证券）。
+从港交所披露易最新上市公司信息 JSON 拉取呈交。筛选只认 t1 / t2 代码，由环境变量传入。
 
 ```bash
-python scripts/run_single.py hkex_financial_reports
+# 年报 + 中期 + 招股/上市文件（默认码）
+HKEX_T2_CODES=40100,40200,30500,30600,30700 \
+  python scripts/run_single.py hkex_financial_reports
+
+# 只看财务报表一级（t1=40000）
+HKEX_T1_CODES=40000 python scripts/run_single.py hkex_financial_reports
 
 python -m generators.finance.hkex_financial_reports \
+  --t2-codes "40100,40200" \
   --stocks "700,941" \
   --days 7 \
   --max 30
@@ -109,7 +115,8 @@ python -m generators.finance.hkex_financial_reports \
 
 | 环境变量 | 默认 | 含义 |
 |---|---|---|
-| `HKEX_T2_CODES` | `40100,40200,30500,30600,30700` | 二级标题代码白名单 |
+| `HKEX_T1_CODES` | 空 | 一级标题代码白名单 |
+| `HKEX_T2_CODES` | `40100,40200,30500,30600,30700` | 二级标题代码白名单；与 t1 都不设时用此默认 |
 | `HKEX_KEYWORDS` | 空 | 标题或类别文本关键词 |
 | `HKEX_STOCKS` | 空 | 股份代号，去前导零比较 |
 | `HKEX_DAYS` | 7 | 相对发放日的天数窗 |

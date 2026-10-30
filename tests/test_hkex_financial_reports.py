@@ -175,6 +175,7 @@ def gen(tmp_path, monkeypatch):
     monkeypatch.setenv("HKEX_MAX_PAGES", "3")
     monkeypatch.setenv("HKEX_MAX_ITEMS", "50")
     monkeypatch.setenv("HKEX_REQUEST_INTERVAL", "0")
+    monkeypatch.delenv("HKEX_T1_CODES", raising=False)
     monkeypatch.delenv("HKEX_T2_CODES", raising=False)
     monkeypatch.delenv("HKEX_KEYWORDS", raising=False)
     monkeypatch.delenv("HKEX_STOCKS", raising=False)
@@ -279,6 +280,19 @@ def test_custom_t2_codes_replace_default(tmp_path, monkeypatch):
     custom = HkexFinancialReportsGenerator(base_dir=tmp_path)
     assert custom._match_filters(ESG_REPORT) is True
     assert custom._match_filters(ANNUAL_REPORT) is False
+
+
+def test_custom_t1_codes_filter(tmp_path, monkeypatch):
+    monkeypatch.setenv("HKEX_T1_CODES", "40000")
+    monkeypatch.setenv("HKEX_T2_CODES", "")
+    monkeypatch.setenv("HKEX_DAYS", "36500")
+    monkeypatch.setenv("HKEX_DOWNLOAD_PDF", "false")
+    monkeypatch.setenv("HKEX_REQUEST_INTERVAL", "0")
+    custom = HkexFinancialReportsGenerator(base_dir=tmp_path)
+    assert custom._match_filters(ANNUAL_REPORT) is True
+    assert custom._match_filters(ESG_REPORT) is True
+    assert custom._match_filters(PROSPECTUS) is False
+    assert custom._match_filters(QUARTERLY_RESULTS) is False
 
 
 def test_stock_filter_matches_without_leading_zeros(tmp_path, monkeypatch):
