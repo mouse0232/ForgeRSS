@@ -66,6 +66,18 @@ def safe_filename(s: str, max_len: int = 50) -> str:
     return cleaned[:max_len].rstrip(". ")
 
 
+def primary_category(l_txt: Optional[str]) -> str:
+    text = (l_txt or "").strip()
+    if not text:
+        return "港股财报"
+    marker = " - ["
+    if marker in text:
+        return text.split(marker, 1)[0].strip() or "港股财报"
+    if " - " in text:
+        return text.split(" - ", 1)[0].strip() or "港股财报"
+    return text
+
+
 def _parse_csv_env(name: str) -> List[str]:
     raw = os.getenv(name, "") or ""
     return [part.strip() for part in raw.split(",") if part.strip()]
@@ -296,7 +308,7 @@ class HkexFinancialReportsGenerator(BaseFeedGenerator):
                 published_at=published_at,
                 content="\n".join(content_parts),
                 summary=(title or display_title)[:200],
-                category="港股财报",
+                category=primary_category(item.get("lTxt")),
                 author="HKEXnews",
             )
         except Exception as exc:

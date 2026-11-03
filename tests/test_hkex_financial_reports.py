@@ -14,6 +14,7 @@ from generators.finance.hkex_financial_reports import (
     HkexFinancialReportsGenerator,
     normalize_stock_code,
     parse_rel_time,
+    primary_category,
     safe_filename,
     split_t2_codes,
 )
@@ -216,6 +217,18 @@ def test_safe_filename_strips_illegal_chars_and_caps_length():
     assert len(name) <= 50
 
 
+def test_primary_category_uses_t1_name_from_ltxt():
+    assert (
+        primary_category("財務報表/環境、社會及管治資料 - [年報]")
+        == "財務報表/環境、社會及管治資料"
+    )
+    assert primary_category("上市文件 - [發售以供認購]") == "上市文件"
+    assert primary_category("公告及通告 - [季度業績]") == "公告及通告"
+    assert primary_category("") == "港股财报"
+    assert primary_category(None) == "港股财报"
+    assert primary_category("上市文件") == "上市文件"
+
+
 def test_default_t2_codes():
     assert DEFAULT_T2_CODES == {"40100", "40200", "30500", "30600", "30700"}
 
@@ -227,7 +240,7 @@ def test_parse_annual_report_fields(gen):
     assert article.title == "[騰訊控股] 2025 Annual Report"
     assert article.published_at == datetime(2026, 10, 27, 22, 33, tzinfo=pytz.UTC)
     assert article.summary == "2025 Annual Report"
-    assert article.category == "港股财报"
+    assert article.category == "財務報表/環境、社會及管治資料"
     assert article.author == "HKEXnews"
     assert "00700" in article.content
     assert "騰訊控股" in article.content
@@ -241,6 +254,7 @@ def test_parse_multi_stock_and_multi_t2(gen):
     article = gen._parse_item(MULTI_STOCK_HTM)
     assert article is not None
     assert article.title == "[美團－Ｗ、美團－ＷＲ] 全球發售"
+    assert article.category == "上市文件"
     assert article.url.endswith("_c.htm")
     assert "03690" in article.content
     assert "83690" in article.content
