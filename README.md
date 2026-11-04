@@ -54,6 +54,7 @@
 | **巨潮资讯网年报/半年报** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_cninfo_annual_reports.xml) |
 | **巨潮资讯网上新企业** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_cninfo_ipo.xml) |
 | **披露易港股财报** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_hkex_financial_reports.xml) |
+| **SEC EDGAR 美股年报/招股** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_sec_edgar_financial_reports.xml) |
 | **小宇宙播客（示例订阅）** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_xiaoyuzhou.xml) |
 | **雪球用户动态（示例订阅）** | [订阅](https://cdn.jsdelivr.net/gh/tmwgsicp/ForgeRSS@main/feeds/feed_xueqiu_user.xml) |
 | **国家药监局药品公告** | 需本地运行（见下方说明） |
@@ -85,6 +86,7 @@
 | 巨潮资讯网年报/半年报 | 金融 | curl_cffi | `feed_cninfo_annual_reports.xml` | 6小时 | CI/本地 |
 | 巨潮资讯网上新企业 | 金融 | curl_cffi | `feed_cninfo_ipo.xml` | 6小时 | CI/本地 |
 | 披露易港股财报 | 金融 | requests | `feed_hkex_financial_reports.xml` | 6小时 | CI/本地 |
+| SEC EDGAR 美股年报/招股 | 金融 | requests | `feed_sec_edgar_financial_reports.xml` | 6小时 | CI/本地 |
 | **知乎热榜** | 社交媒体 | **DrissionPage + 登录** | `feed_zhihu_hot.xml` | **手动** | **仅本地** |
 | **知乎用户动态** | 社交媒体 | **DrissionPage + 登录** | `feed_zhihu_user.xml` | **手动** | **仅本地** |
 | **B 站 UP 主** | 社交媒体 | **DrissionPage + 登录** | `feed_bilibili_up.xml` | **手动** | **仅本地** |
@@ -420,6 +422,23 @@ PDF 归档到 `downloads/hkex_pdfs/<公司名>_<股票代码>/<标题>.pdf`。�
 
 ---
 
+## SEC EDGAR（美股年报/招股）
+
+从 EDGAR Daily Index 按美东 T+1 拉取已收盘交易日的 `master.idx`。未设 `SEC_FORMS` 时不过滤；GitHub Actions 默认筛 `10-K,20-F,424B4`（详见 [`generators/finance/README.md`](generators/finance/README.md)）：
+
+```bash
+python scripts/run_single.py sec_edgar_financial_reports --max 20
+
+SEC_FORMS=10-K,20-F python scripts/run_single.py sec_edgar_financial_reports
+
+SEC_FORMS=S-1,F-1,424B4 SEC_FEED_NAME=sec_edgar_ipo \
+  python scripts/run_single.py sec_edgar_financial_reports
+```
+
+原文归档到 `downloads/sec_edgar/<公司名>_<CIK>/`。默认不下载附件。请求必须带声明式 User-Agent（应用名 + 邮箱）。
+
+---
+
 ## 雪球用户动态订阅（**无需登录 / 无需浏览器登录**）
 
 雪球用户主页走的是阿里云 WAF，不能直接 curl 抓。用 DrissionPage **headless** 模式启动一次真实 Chrome 进程过 WAF 拿到 HTML，再解析时间线。整个流程不需要登录态、不需要 cookie、不依赖 Display，**CI 可跑**。
@@ -567,6 +586,7 @@ forgerss/
 │   ├── finance/               # 金融/公司公告
 │   │   ├── cninfo_announcements.py
 │   │   ├── hkex_financial_reports.py
+│   │   ├── sec_edgar_financial_reports.py
 │   │   └── xueqiu/            # 雪球用户动态（无需登录）
 │   ├── social/                # 社交媒体（每平台一个目录，scraper+generator）
 │   │   ├── base/              # 通用下载工具

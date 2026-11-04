@@ -131,3 +131,47 @@ python -m generators.finance.hkex_financial_reports \
 - PDF（可选）：`downloads/hkex_pdfs/<公司名>_<股票代码>/<标题>.pdf`
 
 标题类别数字码见 `.monkeycode/specs/2026-10-28-hkex-financial-reports/hkexnews-search-filter.md`。
+
+## SEC EDGAR 美股年报/招股订阅
+
+从 EDGAR Daily Index `master.{yyyymmdd}.idx` 拉取已收盘交易日申报。未设 `SEC_FORMS` 时不过滤 Form Type。GitHub Actions 默认筛 `10-K,20-F,424B4`。调度为美东 T+1：永远不请求当天 idx。
+
+```bash
+# 全部 Form Type
+python scripts/run_single.py sec_edgar_financial_reports
+
+# 只要年报
+SEC_FORMS=10-K,20-F python scripts/run_single.py sec_edgar_financial_reports
+
+# 只要招股，输出独立 Feed
+SEC_FORMS=S-1,F-1,424B4 SEC_FEED_NAME=sec_edgar_ipo \
+  python scripts/run_single.py sec_edgar_financial_reports
+
+python -m generators.finance.sec_edgar_financial_reports \
+  --forms "10-K,20-F" \
+  --tickers "AAPL,MSFT" \
+  --days 7 \
+  --max 30
+```
+
+| 环境变量 | 默认 | 含义 |
+|---|---|---|
+| `SEC_FORMS` | 空（不过滤） | Form Type 白名单；CI 默认 `10-K,20-F,424B4` |
+| `SEC_TICKERS` | 空 | 股票代码，映射为 CIK |
+| `SEC_CIKS` | 空 | 直接指定 CIK |
+| `SEC_KEYWORDS` | 空 | 公司名关键词 |
+| `SEC_DAYS` | 7 | 从美东昨天起回看的已收盘自然日数 |
+| `SEC_MAX_ITEMS` | 50 | Feed 条数上限 |
+| `SEC_MAX_INDEX_DAYS` | 14 | 为找齐交易日而探测的自然日上限 |
+| `SEC_INCLUDE_AMENDMENTS` | false | 同时保留 `{form}/A` |
+| `SEC_DOWNLOAD` | false | 是否下载完整提交 `.txt` |
+| `SEC_REQUEST_INTERVAL` | 0.2 | 请求间隔秒 |
+| `SEC_USER_AGENT` | `ForgeRSS forgerss@users.noreply.github.com` | 须含应用名与联系邮箱 |
+| `SEC_FEED_NAME` | `sec_edgar_financial_reports` | 输出文件名 |
+
+输出：
+
+- RSS Feed：`feeds/feed_sec_edgar_financial_reports.xml`
+- 原文（可选）：`downloads/sec_edgar/<公司名>_<CIK>/<Form Type>_<Date Filed>_<Accession>.txt`
+
+SEC Fair Access 要求声明式 User-Agent。GitHub Actions 出口 IP 若持续 403，需改用自托管 runner。
