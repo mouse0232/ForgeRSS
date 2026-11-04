@@ -1,0 +1,117 @@
+# Generate SEC EDGAR annual reports / prospectuses RSS feed
+# Filter by Form Type via SEC_FORMS
+# Default: every 6 hours, T+1 (yesterday ET only)
+
+name: Generate SEC EDGAR Financial Reports Feed
+
+on:
+  schedule:
+    # Every 6 hours (0:00, 6:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      forms:
+        description: 'EDGAR form types, comma-separated (e.g. 10-K,20-F,424B4)'
+        required: false
+        default: '10-K,20-F,424B4'
+        type: string
+      tickers:
+        description: 'Optional ticker filter, comma-separated (e.g. AAPL,MSFT)'
+        required: false
+        default: ''
+        type: string
+      include_amendments:
+        description: 'Also keep /A amendments of the selected forms'
+        required: false
+        default: false
+        type: boolean
+      days:
+        description: 'Lookback window in days'
+        required: false
+        default: '7'
+        type: string
+      max_articles:
+        description: 'Max articles in the feed'
+        required: false
+        default: '50'
+        type: string
+      feed_name:
+        description: 'Output feed name (feeds/feed_{name}.xml)'
+        required: false
+        default: 'sec_edgar_financial_reports'
+        type: string
+      full_refresh:
+        description: 'Full refresh (ignore cache)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
+  SEC_FORMS: ${{ github.event.inputs.forms || vars.SEC_FORMS || '10-K,20-F,424B4' }}
+  SEC_TICKERS: ${{ github.event.inputs.tickers || vars.SEC_TICKERS || '' }}
+  SEC_INCLUDE_AMENDMENTS: ${{ github.event.inputs.include_amendments || vars.SEC_INCLUDE_AMENDMENTS || 'false' }}
+  SEC_DAYS: ${{ github.event.inputs.days || vars.SEC_DAYS || '7' }}
+  SEC_MAX_ITEMS: '30'
+  SEC_DOWNLOAD: 'false'
+  SEC_FEED_NAME: ${{ github.event.inputs.feed_name || vars.SEC_FEED_NAME || 'sec_edgar_financial_reports' }}
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT || 'ForgeRSS forgerss@users.noreply.github.com' }}
+
+concurrency:
+  group: generate-sec-edgar-financial-reports
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run SEC EDGAR financial reports generator
+        env:
+          MAX_ARTICLES: ${{ github.event.inputs.max_articles || '50' }}
+        run: |
+          if [ "${{ github.event.inputs.full_refresh }}" = "true" ]; then
+            python scripts/run_single.py sec_edgar_financial_reports --full --max $MAX_ARTICLES
+          else
+            python scripts/run_single.py sec_edgar_financial_reports --max $MAX_ARTICLES
+          fi
+
+      - name: Validate feed
+        run: python scripts/validate_feeds.py feeds/feed_${SEC_FEED_NAME}.xml
+
+      - name: Commit and push
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          git add "feeds/feed_${SEC_FEED_NAME}.xml"
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Update SEC EDGAR financial reports feed [skip ci]"
+
+          for attempt in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed, retrying..."
+            sleep 5
+          done
+          exit 1
