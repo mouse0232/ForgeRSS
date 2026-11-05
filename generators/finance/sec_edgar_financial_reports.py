@@ -279,14 +279,77 @@ class SecEdgarFinancialReportsGenerator(BaseFeedGenerator):
             cap = min(cap, int(run_cap))
         return cap
 
+    def _fetch_available_index_dates(self, quarter: int, year: int) -> Set[date]:
+        """爬 EDGAR daily-index 目录页，返回该季度已生成 master.idx 的日期集合。
+
+        SEC 对非交易日（周末 / 联邦假期 / 当天无 filings）不会生成 master.idx，
+        也不会返回 404（一律 403），所以不能靠盲猜日期 + 状态码判断。
+        目录页是官方唯一的"哪些天有数据"来源。
+        """
+        from html.parser import HTMLParser
+
+        class _IdxLinkParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.dates: Set[date] = set()
+
+            def handle_starttag(self, tag, attrs):
+                if tag != "a":
+                    return
+                for name, value in attrs:
+                    if name == "href" and value and value.startswith("master."):
+                        # master.20261103.idx 或 master.20261103.idx.gz
+                        stem = value.split("/")[-1].lstrip("master.").rstrip(".gz").rstrip(".idx")
+                        try:
+                            self.dates.add(datetime.strptime(stem, "%Y%m%d").date())
+                        except ValueError:
+                            pass
+
+        url = f"{ARCHIVES_BASE}edgar/daily-index/{year}/QTR{quarter}/"
+        response = self._request(url)
+        if response is None or response.status_code != 200:
+            self.logger.warning(
+                "Failed to list EDGAR daily-index dir %s (HTTP %s)",
+                url,
+                None if response is None else response.status_code,
+            )
+            return set()
+
+        parser = _IdxLinkParser()
+        parser.feed(_decode_body(response.content))
+        self.logger.info(
+            "EDGAR QTR%s/%s has %d available master.idx files (latest=%s)",
+            quarter,
+            year,
+            len(parser.dates),
+            max(parser.dates).isoformat() if parser.dates else "N/A",
+        )
+        return parser.dates
+
     def _iter_index_dates(self) -> Iterable[date]:
+        """先拉目录页拿到真实存在的 master.idx 列表，再按时间倒序 yield。"""
         today = current_et_datetime().date()
-        start = today - timedelta(days=1)
+
+        # 本季度
+        current_q = quarter_for(today)
+        available = self._fetch_available_index_dates(current_q, today.year)
+
+        # 如果 lookback window 可能跨季度，也捎带上季度
         window = max(self.days, 1)
-        limit = max(self.max_index_days, 1)
-        count = min(window, limit)
-        for offset in range(count):
-            yield start - timedelta(days=offset)
+        earliest = today - timedelta(days=window)
+        if quarter_for(earliest) != current_q:
+            prev_q = 4 if current_q == 1 else current_q - 1
+            prev_year = today.year if prev_q != 4 else today.year - 1
+            available |= self._fetch_available_index_dates(prev_q, prev_year)
+
+        if not available:
+            self.logger.warning("EDGAR daily-index directories returned no files")
+            return
+
+        # 只看 lookback window 内的 + 排倒序
+        cutoff = today - timedelta(days=max(self.max_index_days, window))
+        for day in sorted((d for d in available if d >= cutoff), reverse=True):
+            yield day
 
     def fetch_articles(self) -> List[Article]:
         articles: List[Article] = []
