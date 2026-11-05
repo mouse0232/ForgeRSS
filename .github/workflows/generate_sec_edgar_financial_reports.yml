@@ -55,7 +55,7 @@ env:
   SEC_MAX_ITEMS: '30'
   SEC_DOWNLOAD: 'false'
   SEC_FEED_NAME: ${{ github.event.inputs.feed_name || vars.SEC_FEED_NAME || 'sec_edgar_financial_reports' }}
-  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT || 'ForgeRSS forgerss@users.noreply.github.com' }}
+  SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT || 'ForgeRSS admin@forgerss.dev' }}
 
 concurrency:
   group: generate-sec-edgar-financial-reports

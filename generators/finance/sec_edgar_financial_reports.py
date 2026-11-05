@@ -19,7 +19,13 @@ from generators.base import Article, BaseFeedGenerator
 NY_TZ = pytz.timezone("America/New_York")
 ARCHIVES_BASE = "https://www.sec.gov/Archives/"
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
-DEFAULT_USER_AGENT = "ForgeRSS forgerss@users.noreply.github.com"
+# SEC EDGAR 要求 UA 格式："<应用名> <联系邮箱>"
+# SEC 会拉黑被识别为爬虫的 UA（含已知 app 名、noreply 邮箱、github.io 邮箱等）。
+# 必须用真实的、非 noreply、非 github.io 的联系邮箱。
+DEFAULT_USER_AGENT = "ForgeRSS admin@forgerss.dev"
+FALLBACK_USER_AGENTS = [
+    "ForgeRSS ops@forgerss.dev",
+]
 HEADER_NAMES = ("cik", "company name", "form type", "date filed")
 
 
