@@ -432,43 +432,63 @@ class SecEdgarFinancialReportsGenerator(BaseFeedGenerator):
         return None
 
     def _fetch_master_idx(self, day: date) -> Optional[str]:
+        """拉取指定日期的 EDGAR master.idx。
+
+        返回 None 表示该日期没有可用的 idx（非交易日 / 限流 / 服务器抖动），
+        上层会跳过这一天继续往后找。只有彻底网络不通才 raise IndexFetchError。
+
+        SEC 对非交易日（周末 / 法定假期）返回 403（不是 404），所以 403 不应 break lookback。
+        """
         last_status = None
         for gzipped in (False, True):
             url = master_idx_url(day, gzipped=gzipped)
             response = self._request(url)
             if response is None:
+                # 网络层彻底挂了（DNS / SSL 握手 / 超时耗尽后仍失败）
                 raise IndexFetchError(f"request failed for {url}")
+
             last_status = response.status_code
+
             if response.status_code == 404:
+                # 这天没有 master.idx（可能还没生成 / 非交易日），试 gzipped 版本
                 continue
+
             if response.status_code == 403:
-                self.logger.error(
-                    "EDGAR request forbidden (HTTP 403) for %s. "
-                    "Check SEC_USER_AGENT includes an app name and contact email.",
+                # SEC 对非交易日（周末 / 假期）也返回 403，UA 真被拉黑才是致命
+                # 先试 gzipped，gzipped 也 403 就视为"这天没数据"，跳过去
+                self.logger.warning(
+                    "EDGAR returned 403 for %s (may be non-trading-day). "
+                    "Check SEC_USER_AGENT if this repeats.",
                     url,
                 )
-                raise IndexFetchError("HTTP 403")
+                continue
+
             if response.status_code in (429, 503):
-                self.logger.error(
+                # 限流 / EDGAR 维护。_request 内部已做过 4 次重试 + 退避，
+                # 到这里还不行就视为暂时不可用，跳过去
+                self.logger.warning(
                     "EDGAR rate-limited or unavailable (HTTP %s) for %s",
                     response.status_code,
                     url,
                 )
-                raise IndexFetchError(f"HTTP {response.status_code}")
+                continue
+
             if response.status_code >= 500:
-                self.logger.error(
-                    "EDGAR request failed (HTTP %s) for %s",
+                self.logger.warning(
+                    "EDGAR server error (HTTP %s) for %s, trying gzipped fallback",
                     response.status_code,
                     url,
                 )
-                raise IndexFetchError(f"HTTP {response.status_code}")
+                continue
+
             if response.status_code != 200:
-                self.logger.error(
-                    "EDGAR request failed (HTTP %s) for %s",
+                self.logger.warning(
+                    "EDGAR unexpected HTTP %s for %s",
                     response.status_code,
                     url,
                 )
-                raise IndexFetchError(f"HTTP {response.status_code}")
+                continue
+
             body = response.content
             if gzipped:
                 try:
@@ -477,7 +497,12 @@ class SecEdgarFinancialReportsGenerator(BaseFeedGenerator):
                     pass
             return _decode_body(body)
 
-        self.logger.info("No master.idx for %s (HTTP %s)", day.isoformat(), last_status)
+        # 两个版本都没拿到数据 → 这天跳过
+        self.logger.info(
+            "No usable master.idx for %s (last HTTP %s), skipping",
+            day.isoformat(),
+            last_status,
+        )
         return None
 
     def _match_filters(self, row: dict) -> bool:
